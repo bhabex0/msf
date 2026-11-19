@@ -1,0 +1,952 @@
+"""Unit tests for the advanced platform features added after v1."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "backend"))
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app import auth, config, pki_lab, tool_manager  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models import Finding, ScanRecord  # noqa: E402
+from app.scanner import custom as custom_rules_module  # noqa: E402
+from app.scanner import sca as sca_module  # noqa: E402
+from app.scanner import tools as tools_module  # noqa: E402
+from app.scanner.advanced import (  # noqa: E402
+    analyze_advanced,
+    parse_elf,
+    shannon_entropy,
+)
+from app.scanner.apk import ApkPackage, find_all  # noqa: E402
+from app.scanner.custom import load_custom_rules, run_custom_rules, validate_rule  # noqa: E402
+from app.scanner.exports import cyclonedx_sbom, diff_scans, sarif_report  # noqa: E402
+from app.scanner.lab import (  # noqa: E402
+    apply_proxy,
+    build_lab_plan,
+    open_mobsf_browser,
+    run_patch_step,
+)
+from app.scanner.live import run_live_checks  # noqa: E402
+from app.scanner.medical import analyze_medical  # noqa: E402
+from app.scanner.pki import analyze_pki  # noqa: E402
+from app.scanner.pipeline import _dedupe  # noqa: E402
+from app.scanner.policy import evaluate_policy  # noqa: E402
+from app.scanner.reporting import generate_html_report  # noqa: E402
+from app.scanner.rules import is_benign_pki_string  # noqa: E402
+from app.scanner.sast import SastContext, run_sast  # noqa: E402
+from app.scanner.toolchain import (  # noqa: E402
+    _findings_from_payload,
+    probe_toolchain,
+    run_toolchain,
+)
+
+SAMPLE = ROOT / "sample-vulnerable.apk"
+
+
+def _build_record(apk: ApkPackage) -> ScanRecord:
+    summary = apk.manifest_summary()
+    app_node = next(iter(find_all(apk.manifest, "application")), None)
+    ctx = SastContext(
+        apk=apk, manifest=apk.manifest, summary=summary,
+        network_config=apk.network_security_config(), app_node=app_node,
+    )
+    sast = run_sast(ctx)
+    custom = run_custom_rules(
+        load_custom_rules(), strings=apk.all_strings, summary=summary, apk_names=apk.names,
+    )
+    live_checks, live_findings = run_live_checks(apk.all_strings, apk.sha256, enabled=False)
+    advanced = analyze_advanced(
+        apk, summary, apk.all_strings, apk.certificate,
+        live_findings=live_findings, all_findings=sast + custom,
+    )
+    record = ScanRecord(
+        scan_id="testscan00000001",
+        filename=SAMPLE.name,
+        sha256=apk.sha256,
+        advanced={k: v for k, v in advanced.__dict__.items() if k != "findings"},
+        attack_chains=advanced.attack_chains,
+        playbook=advanced.playbook,
+        compliance=advanced.compliance,
+        live_checks=live_checks,
+    )
+    record.findings.extend([Finding.model_validate(f) for f in sast + custom + advanced.findings])
+    record.compute_summary()
+    record.policy = evaluate_policy(record)
+    return record
+
+
+class FindingLimitTests(unittest.TestCase):
+    """The old 100-result cap is gone; distinct findings are never truncated."""
+
+    @staticmethod
+    def _payload(count: int) -> dict[str, Any]:
+        return {
+            "findings": [
+                {
+                    "id": f"id-{index}",
+                    "title": f"Shared title {index % 3}",
+                    "severity": "medium",
+                    "evidence": f"evidence-{index}",
+                    "description": f"description-{index}",
+                }
+                for index in range(count)
+            ]
+        }
+
+    def test_payload_import_is_unlimited_by_default(self):
+        with patch.object(config, "TOOL_FINDING_LIMIT", 0):
+            findings = _findings_from_payload(self._payload(250), "TestTool")
+        self.assertEqual(len(findings), 250)
+        self.assertEqual(len({f["id"] for f in findings}), 250)
+
+    def test_optional_cap_still_works_when_explicitly_set(self):
+        with patch.object(config, "TOOL_FINDING_LIMIT", 7):
+            findings = _findings_from_payload(self._payload(250), "TestTool")
+        self.assertEqual(len(findings), 7)
+
+    def test_dedupe_preserves_distinct_occurrences(self):
+        findings = [
+            {
+                "id": "SAST-REPEATED",
+                "title": "Repeated rule",
+                "severity": "medium",
+                "description": "same rule",
+                "evidence": f"line {index}",
+                "location": f"File.java:{index}",
+            }
+            for index in range(120)
+        ]
+        self.assertEqual(len(_dedupe(findings)), 120)
+        self.assertEqual(len(_dedupe([findings[0], dict(findings[0])])), 1)
+
+    def test_semgrep_results_are_not_capped(self):
+        results = [
+            {
+                "check_id": "rules.repeated",
+                "path": f"File{index}.java",
+                "start": {"line": index + 1},
+                "extra": {
+                    "severity": "ERROR",
+                    "message": "repeated semgrep rule",
+                    "lines": f"value-{index}",
+                },
+            }
+            for index in range(250)
+        ]
+        log = json.dumps({"results": results})
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            java_source = work / "src"
+            java_source.mkdir()
+            with patch.multiple(
+                tools_module,
+                TOOL_SEMGREP=True,
+                TOOL_FINDING_LIMIT=0,
+            ), patch.object(tools_module, "_which", return_value="semgrep"), patch.object(
+                tools_module, "_run", return_value=(0, log),
+            ):
+                outcome = tools_module.run_semgrep(Path("sample.apk"), work, java_source)
+        self.assertEqual(len(outcome.findings), 250)
+        self.assertEqual(len({f["id"] for f in outcome.findings}), 250)
+
+    def test_sca_advisories_are_not_capped(self):
+        db = {
+            "_version": "test",
+            "components": [
+                {
+                    "name": "libtest",
+                    "markers": ["libtest-1.0"],
+                    "native_libraries": [],
+                    "version_patterns": [r"libtest-([0-9.]+)"],
+                    "osv_name": "libtest",
+                    "ecosystem": "Maven",
+                    "vulnerabilities": [
+                        {
+                            "id": f"TEST-VULN-{index}",
+                            "title": f"Advisory {index}",
+                            "severity": "medium",
+                            "fixed_in": "9.0",
+                            "description": "test advisory",
+                            "remediation": "upgrade",
+                        }
+                        for index in range(120)
+                    ],
+                }
+            ],
+        }
+        with patch.object(sca_module, "load_vuln_db", return_value=db), patch.object(
+            sca_module, "TOOL_FINDING_LIMIT", 0,
+        ):
+            _components, findings, _meta = sca_module.run_sca(
+                ["libtest-1.0"], [], online=False,
+            )
+        self.assertEqual(len(findings), 120)
+
+
+class PkiTests(unittest.TestCase):
+    """Passive certificate analysis and local-only, gated lab material."""
+
+    @staticmethod
+    def _certificate() -> dict[str, Any]:
+        return {
+            "v1_signature": True,
+            "v2_or_v3_signature": False,
+            "signers": [{
+                "subject": "CN=Android Debug,O=Android",
+                "issuer": "CN=Android Debug,O=Android",
+                "serial_hex": "0x1",
+                "valid_from": "2020-01-01T00:00:00+00:00",
+                "valid_until": "2021-01-01T00:00:00+00:00",
+                "signature_algorithm": "SHA1withRSA",
+                "public_key_algorithm": "RSA",
+                "key_size": 1024,
+                "sha256_fingerprint": "ab" * 32,
+                "basic_constraints_ca": True,
+                "self_signed": True,
+            }],
+            "parse_error": None,
+        }
+
+    def test_passive_analysis_produces_pki_findings(self):
+        network = {
+            "resource": "res/xml/network_security_config.xml",
+            "cleartext_traffic_permitted": True,
+            "pinning_configured": False,
+            "trust_user_certs_debug_only": True,
+            "domains": [],
+        }
+        result = analyze_pki(self._certificate(), network)
+        ids = {f["id"] for f in result["findings"]}
+        self.assertIn("PKI-WEAK_SIGNATURE_ALGORITHM-1", ids)
+        self.assertIn("PKI-SMALL_RSA_KEY-1", ids)
+        self.assertIn("PKI-EXPIRED-1", ids)
+        self.assertIn("PKI-CA_CERTIFICATE_USED_AS_APP_SIGNER-1", ids)
+        self.assertIn("PKI-V1-ONLY", ids)
+        self.assertIn("PKI-USER-CA-TRUSTED", ids)
+        self.assertIn("PKI-CLEARTEXT-PERMITTED", ids)
+        self.assertTrue(all(f["category"] == "PKI" for f in result["findings"]))
+        self.assertEqual(result["summary"]["signer_count"], 1)
+        self.assertEqual(result["summary"]["finding_count"], len(result["findings"]))
+        self.assertIn("For authorized security testing only", result["notice"])
+
+    def test_pki_findings_are_informational_only(self):
+        result = analyze_pki(self._certificate(), {
+            "cleartext_traffic_permitted": True,
+            "trust_user_certs_debug_only": True,
+        })
+        self.assertTrue(result["findings"])
+        self.assertTrue(all(f["severity"] == "info" for f in result["findings"]))
+        self.assertTrue(all("not a malware" in f["description"] for f in result["findings"]))
+        self.assertIn("not a malware", result["notice"])
+        self.assertIn("not a malware/threat detection engine", result["notice"])
+
+    def test_policy_never_counts_pki_findings(self):
+        record = ScanRecord(scan_id="pkipolicy0000001", filename="pki.apk")
+        record.findings = [
+            Finding(id="PKI-FORCED-HIGH", title="forced high", severity="high", category="PKI")
+        ]
+        policy = evaluate_policy(record, thresholds={
+            "critical": 0, "high": 0, "medium": 0, "low": 0,
+        })
+        self.assertEqual(policy["status"], "pass")
+        self.assertEqual(policy["actual"]["high"], 0)
+        self.assertEqual(policy["pki_findings_excluded"], 1)
+
+    def test_pki_tool_strings_are_excluded_from_sast_heuristics(self):
+        apk = ApkPackage(SAMPLE)
+        benign = ["keytool", "openssl", "apksigner", "keystore", "a" * 64]
+        ctx = SastContext(
+            apk=apk, manifest={}, summary={}, network_config=None, app_node=None,
+            extra_strings=benign,
+        )
+        self.assertTrue(all(is_benign_pki_string(s) for s in benign))
+        for token in ("keytool", "openssl", "apksigner"):
+            self.assertEqual(ctx.containing(token), [])
+
+    def test_report_includes_pki_section(self):
+        result = analyze_pki(self._certificate(), None)
+        record = ScanRecord(
+            scan_id="pkitest000000001",
+            filename="pki.apk",
+            certificate=self._certificate(),
+            pki={k: v for k, v in result.items() if k != "findings"},
+        )
+        html = generate_html_report(record)
+        self.assertIn("PKI / certificate &amp; keystore", html)
+        self.assertIn("SHA1withRSA", html)
+        self.assertIn("Device CA installation is never performed", html)
+        self.assertIn("not a malware or threat detection engine", html)
+
+    def test_lab_gate_and_local_generation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lab_dir = Path(tmp) / "pki"
+            with patch.object(config, "PKI_LAB_ENABLED", False), patch.object(config, "PKI_DIR", lab_dir):
+                blocked = pki_lab.generate_ca()
+            self.assertEqual(blocked["status"], "skipped")
+            self.assertIn("APKPT_PKI_LAB", blocked["detail"])
+            self.assertFalse(lab_dir.exists())
+
+            with patch.object(config, "PKI_LAB_ENABLED", True), patch.object(config, "PKI_DIR", lab_dir):
+                ca = pki_lab.generate_ca("APKPT Unit Test CA", days=30)
+                self.assertEqual(ca["status"], "completed")
+                self.assertTrue(pki_lab.ca_cert_path().is_file())
+                self.assertTrue(pki_lab.ca_key_path().is_file())
+                details = ca["ca"]["details"]
+                self.assertEqual(details["subject"], "CN=APKPT Unit Test CA,O=APKPT Authorized Test Lab")
+                self.assertTrue(details["self_signed"])
+                keystore = pki_lab.generate_keystore("unit-lab")
+                self.assertEqual(keystore["status"], "completed")
+                self.assertTrue(pki_lab.keystore_path().is_file())
+                self.assertTrue(keystore["keystore"]["ca_signed"])
+                status = pki_lab.status()
+                self.assertTrue(status["enabled"])
+                self.assertFalse(status["device_installation"]["performed_by_platform"])
+                self.assertNotIn("password", status["keystore"])
+
+    def test_pki_api_is_audited_and_gated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lab_dir = Path(tmp) / "pki"
+            with patch.object(config, "AUTH_ENABLED", True), \
+                 patch.object(config, "AUDIT_LOG", Path(tmp) / "audit.log"), \
+                 patch.object(config, "PKI_LAB_ENABLED", True), \
+                 patch.object(config, "PKI_DIR", lab_dir):
+                with TestClient(app) as client:
+                    status = client.get("/api/pki/status")
+                    self.assertEqual(status.status_code, 200)
+                    self.assertFalse(status.json()["device_installation"]["performed_by_platform"])
+                    self.assertEqual(client.post("/api/pki/ca/generate", json={"confirm": True}).status_code, 401)
+                    token = auth.create_token("admin", ttl_hours=1)
+                    headers = {"Authorization": f"Bearer {token}"}
+                    self.assertEqual(client.post(
+                        "/api/pki/ca/generate", json={"confirm": False}, headers=headers,
+                    ).status_code, 400)
+                    generated = client.post(
+                        "/api/pki/ca/generate", json={"confirm": True, "common_name": "API Test CA"},
+                        headers=headers,
+                    )
+                    self.assertEqual(generated.status_code, 200)
+                    self.assertEqual(generated.json()["status"], "completed")
+                    audit = (Path(tmp) / "audit.log").read_text(encoding="utf-8")
+                    self.assertIn("pki.ca.generate", audit)
+
+
+class AdvancedFeatureTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not SAMPLE.exists():
+            raise unittest.SkipTest("sample-vulnerable.apk not generated")
+        cls.apk = ApkPackage(SAMPLE)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.apk.close()
+
+    def test_deep_links_and_network_config(self):
+        summary = self.apk.manifest_summary()
+        advanced = analyze_advanced(self.apk, summary, self.apk.all_strings, self.apk.certificate)
+        schemes = {link["scheme"] for link in advanced.deep_links}
+        self.assertIn("insecureapp", schemes)
+        self.assertTrue(any(link["auto_verified"] for link in advanced.deep_links))
+        self.assertTrue(advanced.network_config_detail["user_ca_trusted"])
+        self.assertTrue(advanced.network_config_detail["expired_pins"])
+
+    def test_trackers_packer_and_elf(self):
+        summary = self.apk.manifest_summary()
+        advanced = analyze_advanced(self.apk, summary, self.apk.all_strings, self.apk.certificate)
+        self.assertGreaterEqual(len(advanced.trackers), 2)
+        self.assertTrue(advanced.apkid["packers_or_obfuscators"])
+        self.assertTrue(advanced.elf_hardening)
+        self.assertTrue(advanced.elf_hardening[0]["nx_stack"])
+
+    def test_elf_parser_and_entropy_helpers(self):
+        elf = parse_elf((self.apk.read("lib/arm64-v8a/libfoo.so")))
+        self.assertEqual(elf.get("class"), "ELF64")
+        self.assertTrue(elf.get("pie"))
+        self.assertGreater(shannon_entropy("aAbB0123!@#xyzXYZ"), 3.0)
+
+    def test_custom_rules(self):
+        rules = load_custom_rules()
+        ids = {r["id"] for r in rules}
+        self.assertTrue(ids)
+        findings = run_custom_rules(
+            rules, strings=self.apk.all_strings,
+            summary=self.apk.manifest_summary(), apk_names=self.apk.names,
+        )
+        fids = {f["id"] for f in findings}
+        self.assertIn("CUSTOM-DEBUG-ENDPOINT", fids)
+        self.assertIn("CUSTOM-PREMIUM-SMS", fids)
+        with self.assertRaises(ValueError):
+            validate_rule({"id": "bad", "title": "bad", "pattern": "["})
+
+    def test_policy_exports_diff_and_report(self):
+        record = _build_record(self.apk)
+        self.assertEqual(record.policy["status"], "fail")
+        self.assertTrue(any(c["name"] == "WebView-to-Java RCE chain" for c in record.attack_chains))
+        html = generate_html_report(record)
+        for needle in ("Advanced analysis", "Release policy gate", "Attack chains", "Custom:"):
+            self.assertIn(needle, html)
+        sbom = cyclonedx_sbom(record)
+        sarif = sarif_report(record)
+        self.assertEqual(sbom["bomFormat"], "CycloneDX")
+        self.assertGreaterEqual(len(sbom["vulnerabilities"]), 0)
+        self.assertEqual(sarif["version"], "2.1.0")
+        self.assertGreater(sarif["runs"][0]["results"].__len__(), 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            record.scan_id = "export1"
+            path = Path(tmp) / "sbom.json"
+            path.write_text(json.dumps(sbom), encoding="utf-8")
+            self.assertTrue(path.exists())
+        previous = record.model_copy(deep=True)
+        previous.scan_id = "previous"
+        previous.findings = previous.findings[:-1]
+        diff = diff_scans(record, previous)
+        self.assertEqual(diff["counts"]["new"], 1)
+
+    def test_live_checks_disabled(self):
+        checks, findings = run_live_checks(self.apk.all_strings, self.apk.sha256, enabled=False)
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(checks[0]["status"], "skipped")
+        self.assertEqual(findings, [])
+
+    def test_auth_token_roundtrip(self):
+        token = auth.create_token("admin", ttl_hours=1)
+        self.assertEqual(auth.verify_token(token), "admin")
+        self.assertIsNone(auth.verify_token(token + "tampered"))
+
+    def test_api_auth_guard_and_rule_crud(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rules_path = Path(tmp) / "rules.json"
+            with patch.object(config, "AUTH_ENABLED", True), \
+                 patch.object(config, "AUDIT_LOG", Path(tmp) / "audit.log"), \
+                 patch.object(custom_rules_module, "CUSTOM_RULES_PATH", rules_path):
+                with TestClient(app) as client:
+                    self.assertEqual(client.get("/api/health").status_code, 200)
+                    self.assertEqual(client.get("/health").status_code, 200)
+                    self.assertEqual(client.get("/healthz").status_code, 200)
+                    self.assertEqual(client.post("/api/rules", json={
+                        "id": "API-TEST", "title": "t", "pattern": "t",
+                    }).status_code, 401)
+                    token = auth.create_token("admin", ttl_hours=1)
+                    headers = {"Authorization": f"Bearer {token}"}
+                    self.assertEqual(client.post("/api/rules", json={
+                        "id": "API-TEST", "title": "t", "pattern": "t",
+                    }, headers=headers).status_code, 200)
+                    self.assertIn("API-TEST", [r["id"] for r in client.get("/api/rules").json()])
+                    self.assertEqual(client.request("DELETE", "/api/rules", json={
+                        "rule_id": "API-TEST",
+                    }, headers=headers).status_code, 200)
+                    self.assertTrue((Path(tmp) / "audit.log").exists())
+
+    def test_medical_analysis_and_policy_gate(self):
+        summary = self.apk.manifest_summary()
+        network_config = self.apk.network_security_config()
+        sast = run_sast(SastContext(
+            apk=self.apk, manifest=self.apk.manifest, summary=summary,
+            network_config=network_config,
+            app_node=next(iter(find_all(self.apk.manifest, "application")), None),
+        ))
+        medical = analyze_medical(
+            summary=summary, strings=self.apk.all_strings, findings=sast,
+            network_config=network_config,
+        )
+        self.assertEqual(medical["status"], "enabled")
+        self.assertTrue(medical["phi_present"])
+        self.assertEqual(medical["risk_level"], "critical")
+        finding_ids = {f["id"] for f in medical["findings"]}
+        self.assertIn("MED-PHI-CLEARTEXT", finding_ids)
+        self.assertIn("MED-PHI-BACKUP", finding_ids)
+        self.assertGreater(medical["standards"]["gap_count"], 0)
+        self.assertIn("not a certification", medical["disclaimer"])
+
+        record = _build_record(self.apk)
+        record.medical = {k: v for k, v in medical.items() if k != "findings"}
+        record.findings.extend([Finding.model_validate(f) for f in medical["findings"]])
+        record.compute_summary()
+        with patch.object(config, "POLICY_MEDICAL_GAPS", 0):
+            policy = evaluate_policy(record)
+        self.assertEqual(policy["status"], "fail")
+        self.assertTrue(any(v["severity"] == "medical" for v in policy["violations"]))
+
+    def test_toolchain_lab_and_invasive_gates(self):
+        package = "com.example.insecure.demo"
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            with patch.multiple(
+                config,
+                TOOLCHAIN_AUTO=False,
+                TOOL_APKHUNT=False,
+                TOOL_APKLEAKS=False,
+                TOOL_APPSCAN=False,
+                EMULATOR_AUTO=False,
+                ALLOW_INVASIVE=False,
+                BROWSER_OPEN_ENABLED=False,
+                MOBSF_URL="",
+                MOBSF_DYNAMIC_URL="",
+            ):
+                tools = probe_toolchain()
+                chain = run_toolchain(
+                    SAMPLE, work, {"package": package},
+                    {"user_ca_trusted": False, "cleartext_enabled": True, "pin_sets": [{}]},
+                )
+                lab = build_lab_plan(
+                    SAMPLE, work, package, {"user_ca_trusted": False, "cleartext_enabled": True},
+                )
+                proxy = apply_proxy("127.0.0.1", 8080)
+                patch_result = run_patch_step("patch-apk.py", SAMPLE, work, package)
+                browser = open_mobsf_browser()
+            self.assertGreaterEqual(len(tools), 16)
+            self.assertTrue(all(not t["ran"] for t in chain.tools))
+            steps = {s["name"]: s for s in chain.patching["steps"]}
+            for name in (
+                "patch-apk.py", "objection-frida-injection", "manual-smali-patching",
+                "APatch-root-system-modification", "ReC-Manager", "RMS-runtime-mobile-security",
+                "mod-translate-app",
+            ):
+                self.assertIn(name, steps)
+            self.assertEqual(steps["network-security-config-patch"]["status"], "manual")
+            self.assertFalse(chain.patching["executable"])
+            self.assertTrue((work / "lab" / "apkpt_mitm_addon.py").exists())
+            self.assertTrue(any(c["name"] == "set_android_proxy" for c in chain.lab["commands"]))
+            self.assertTrue(any("user CAs" in n for n in chain.lab["network_security_notes"]))
+            self.assertEqual(proxy["status"], "skipped")
+            self.assertEqual(patch_result["status"], "skipped")
+            self.assertEqual(browser["status"], "skipped")
+            self.assertIn("authorized security testing only", lab["authorization"].lower())
+
+        with patch.object(config, "MOBSF_URL", "http://127.0.0.1:8000/mobsf"), \
+             patch.object(config, "BROWSER_OPEN_ENABLED", False):
+            hostile = open_mobsf_browser("http://127.0.0.1:8000.mobsf.example")
+        self.assertEqual(hostile["status"], "error")
+
+    def test_report_includes_medical_and_lab_sections(self):
+        record = _build_record(self.apk)
+        medical = analyze_medical(
+            summary=self.apk.manifest_summary(),
+            strings=self.apk.all_strings,
+            findings=[f.model_dump() for f in record.findings],
+            network_config=self.apk.network_security_config(),
+        )
+        record.medical = {k: v for k, v in medical.items() if k != "findings"}
+        record.toolchain = probe_toolchain()
+        with tempfile.TemporaryDirectory() as tmp:
+            lab = build_lab_plan(
+                SAMPLE, Path(tmp), record.manifest.package,
+                {"user_ca_trusted": False, "cleartext_enabled": True},
+            )
+        record.emulator = lab
+        record.patching = lab["patching"]
+        html = generate_html_report(record)
+        for needle in (
+            "Medical / PHI analysis", "Advanced toolchain and interception lab",
+            "Generated lab commands", "Patch / instrumentation workflows",
+            "For authorized security testing only", "not certifications",
+        ):
+            self.assertIn(needle, html)
+
+    def test_api_health_config_and_lab_endpoints(self):
+        with patch.multiple(
+            config,
+            EMULATOR_AUTO=False,
+            ALLOW_INVASIVE=False,
+            BROWSER_OPEN_ENABLED=False,
+            MOBSF_URL="",
+            MOBSF_DYNAMIC_URL="",
+            TOOL_FINDING_LIMIT=0,
+        ):
+            with TestClient(app) as client:
+                health = client.get("/api/health").json()
+                self.assertIn("medical", health["engines"])
+                self.assertIn("toolchain", health["engines"])
+                self.assertGreaterEqual(len(health["toolchain"]), 16)
+                self.assertEqual(health["limits"]["finding_limit"], 0)
+                cfg = client.get("/api/config").json()
+                self.assertIn("medical", cfg)
+                self.assertIn("lab", cfg)
+                self.assertTrue(cfg["limits"]["finding_limit_unlimited"])
+                self.assertEqual(client.get("/api/tools/advanced").status_code, 200)
+                self.assertEqual(client.get("/api/lab/status").status_code, 200)
+
+    def test_java_runtime_override(self):
+        with patch.dict(os.environ, {"APKPT_JAVA_CMD": r"C:\java\bin\java.exe"}):
+            data = tool_manager.catalog()
+        self.assertEqual(
+            data["emulator"]["needs"]["java_runtime"],
+            r"Installed: C:\java\bin\java.exe",
+        )
+
+    def test_tool_manager_catalog_sources_and_gates(self):
+        data = tool_manager.catalog()
+        tools = {t["id"]: t for t in data["tools"]}
+        self.assertFalse(data["enabled"])
+        self.assertGreaterEqual(len(tools), 20)
+        for expected in (
+            "apktool", "jadx", "platform-tools", "cmdline-tools", "aapt2",
+            "apksigner", "keytool", "openssl",
+            "apkleaks", "apkhunt", "objection", "frida-tools", "mitmproxy",
+            "semgrep", "mobsf", "patch-apk", "trashdroid", "rms",
+            "zaproxy", "burp", "apatch", "recmanager", "chromium",
+        ):
+            self.assertIn(expected, tools)
+        self.assertTrue(all(tool_manager.safe_url(t["source_url"]) for t in tools.values()))
+        self.assertIn("api.github.com", data["allowed_hosts"])
+        self.assertIn("dl.google.com", data["allowed_hosts"])
+        self.assertEqual(set(data["allowed_hosts"]), set(tool_manager.ALLOWED_HOSTS))
+        self.assertEqual(data["source_policy"]["allowed_hosts"], data["allowed_hosts"])
+        self.assertEqual(data["source_policy"]["config_env"], "APKPT_TOOL_ALLOWED_HOSTS")
+        self.assertIn("system", data["os"])
+        self.assertIn("java_runtime", data["emulator"]["needs"])
+        self.assertTrue(all("web_open" in t for t in tools.values()))
+        self.assertEqual([group["id"] for group in data["groups"]], [
+            "decode", "static", "device", "runtime", "dynamic", "proxy", "root",
+        ])
+        self.assertTrue(all("icon" in t and t["icon"] for t in tools.values()))
+        self.assertTrue(all("group" in t and "order" in t for t in tools.values()))
+        orders = [t["order"] for t in data["tools"]]
+        self.assertEqual(orders, sorted(orders))
+        self.assertEqual(tools["recmanager"]["group"], "root")
+        self.assertTrue(all(group["count"] > 0 for group in data["groups"]))
+        self.assertEqual(set(tool_manager.ALLOWED_HOSTS), set(config.TOOL_ALLOWED_HOSTS))
+        self.assertFalse(tool_manager.safe_url("https://evil.example/repo.git"))
+        self.assertFalse(tool_manager.safe_url("http://api.github.com/repos"))
+
+        self.assertEqual(tools["apksigner"]["group"], "runtime")
+        self.assertIn("pki", data)
+        self.assertIn("authorization", data["pki"])
+        self.assertIn("device_installation", data["pki"])
+        manual = {k: v for k, v in tools.items() if v["manual"]}
+        self.assertIn("burp", manual)
+        self.assertEqual(manual["burp"]["actions"], ["verify"])
+        for pki_tool_id in ("keytool", "openssl"):
+            self.assertIn(pki_tool_id, manual)
+            self.assertEqual(manual[pki_tool_id]["actions"], ["verify"])
+        self.assertTrue(tool_manager.safe_url(tools["keytool"]["source_url"]))
+        self.assertTrue(tool_manager.safe_url(tools["openssl"]["source_url"]))
+        self.assertTrue(tool_manager.safe_url(tools["apksigner"]["source_url"]))
+        self.assertTrue(tools["patch-apk"]["invasive"])
+        self.assertIn("pull", tools["apkhunt"]["actions"])
+        self.assertNotIn("pull", tools["apktool"]["actions"])
+        self.assertTrue(all("installable" in t and "install_block_reason" in t for t in tools.values()))
+        self.assertTrue(all(not t["installable"] and t["install_block_reason"] for t in manual.values()))
+        self.assertEqual(
+            tool_manager._job_outcome({"status": "skipped", "detail": "unsupported"}, "fallback"),
+            ("skipped", "unsupported"),
+        )
+        self.assertEqual(
+            tool_manager._job_outcome({"status": "error", "detail": "boom"}, "fallback"),
+            ("failed", "boom"),
+        )
+        self.assertEqual(
+            tool_manager._job_outcome({"status": "installed", "version": "1.2"}, "fallback"),
+            ("completed", "version 1.2"),
+        )
+        self.assertEqual(
+            tool_manager._job_outcome(
+                {"tools": [{"status": "installed"}, {"status": "skipped", "detail": "manual"}]},
+                "fallback",
+            ),
+            ("completed", "1 installed, 1 skipped · manual"),
+        )
+        self.assertEqual(
+            tool_manager._auto_install_block(tool_manager.SPEC_BY_ID["apktool"]),
+            "",
+        )
+        self.assertTrue(tool_manager._auto_install_block(tool_manager.SPEC_BY_ID["burp"]))
+        with patch.object(sys, "version_info", (3, 15, 0)):
+            semgrep_block = tool_manager._auto_install_block(tool_manager.SPEC_BY_ID["semgrep"])
+            self.assertIn("Auto-install is unavailable", semgrep_block)
+            for tool_id in ("semgrep", "mobsf"):
+                result = tool_manager._run_tool_action(
+                    tool_manager.SPEC_BY_ID[tool_id], "install", lambda _line: None,
+                )
+                self.assertEqual(result["status"], "skipped")
+                self.assertIn("Auto-install is unavailable", result["detail"])
+                blocked_tools = {t["id"]: t for t in tool_manager.catalog()["tools"]}
+                self.assertFalse(blocked_tools[tool_id]["installable"])
+                self.assertEqual(blocked_tools[tool_id]["actions"], ["verify"])
+        with patch.object(tool_manager, "_installed_version", return_value=(True, "1.0", "/fake/tool")):
+            installed_tools = {t["id"]: t for t in tool_manager.catalog()["tools"]}
+            self.assertNotIn("install", installed_tools["platform-tools"]["actions"])
+            self.assertIn("update", installed_tools["platform-tools"]["actions"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.multiple(
+                config,
+                TOOL_MANAGER_ENABLED=False,
+                TOOLS_ROOT=Path(tmp) / "tools",
+                ANDROID_SDK_ROOT=Path(tmp) / "tools" / "android-sdk",
+                INSTALLED_DB_PATH=Path(tmp) / "installed_tools.db",
+            ):
+                job = tool_manager.MANAGER.submit("apktool", "install", "unit-test")
+                self.assertEqual(job.status, "skipped")
+                self.assertIn("APKPT_TOOL_MANAGER", job.detail)
+                self.assertTrue(job.logs)
+                with self.assertRaises(ValueError):
+                    tool_manager.MANAGER.submit("not-a-tool", "install", "unit-test")
+                with self.assertRaises(ValueError):
+                    tool_manager.MANAGER.submit("all", "explode", "unit-test")
+
+    def test_obsolete_manager_disabled_jobs_are_archived_and_hidden(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.multiple(
+                config,
+                TOOL_MANAGER_ENABLED=True,
+                TOOLS_ROOT=Path(tmp) / "tools",
+                INSTALLED_DB_PATH=Path(tmp) / "installed_tools.db",
+            ):
+                manager = tool_manager.JobManager()
+                jobs_dir = tool_manager._jobs_dir()
+                stale = {
+                    "job_id": "stale-unit-job",
+                    "tool_id": "apktool",
+                    "action": "install",
+                    "actor": "unit-test",
+                    "status": "skipped",
+                    "detail": tool_manager.DISABLED_MANAGER_DETAIL,
+                    "started_at": "2026-11-18T18:59:44+00:00",
+                    "logs": [f"[18:59:44] {tool_manager.DISABLED_MANAGER_DETAIL}"],
+                    "result": {},
+                }
+                active = {
+                    "job_id": "active-unit-job",
+                    "tool_id": "apktool",
+                    "action": "verify",
+                    "actor": "unit-test",
+                    "status": "completed",
+                    "detail": "tool present",
+                    "started_at": "2026-11-19T10:00:00+00:00",
+                    "logs": ["[10:00:00] tool present"],
+                    "result": {"status": "ok"},
+                }
+                (jobs_dir / "stale-unit-job.json").write_text(
+                    json.dumps(stale), encoding="utf-8",
+                )
+                (jobs_dir / "active-unit-job.json").write_text(
+                    json.dumps(active), encoding="utf-8",
+                )
+
+                self.assertEqual(manager.archive_obsolete_jobs(), 1)
+                self.assertEqual([p.name for p in jobs_dir.glob("*.json")],
+                                 ["active-unit-job.json"])
+                self.assertTrue(list((jobs_dir / "archive").glob("*/*.json")))
+                self.assertEqual([job.job_id for job in manager.list()],
+                                 ["active-unit-job"])
+
+    def test_tool_manager_api_endpoints_are_gated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.multiple(
+                config,
+                TOOL_MANAGER_ENABLED=False,
+                TOOLS_ROOT=Path(tmp) / "tools",
+                ANDROID_SDK_ROOT=Path(tmp) / "tools" / "android-sdk",
+                INSTALLED_DB_PATH=Path(tmp) / "installed_tools.db",
+                BROWSER_OPEN_ENABLED=False,
+                MOBSF_URL="",
+                MOBSF_DYNAMIC_URL="",
+            ), TestClient(app) as client:
+                catalog = client.get("/api/tools/catalog")
+                self.assertEqual(catalog.status_code, 200)
+                self.assertFalse(catalog.json()["enabled"])
+                self.assertEqual(client.get("/api/tools/jobs").status_code, 200)
+                for path in (
+                    "/api/tools/install-all",
+                    "/api/tools/update-all",
+                    "/api/tools/emulator/install",
+                ):
+                    response = client.post(path, json={"confirm": True})
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["status"], "skipped")
+                single = client.post("/api/tools/apktool/install", json={"confirm": True})
+                self.assertEqual(single.status_code, 200)
+                self.assertEqual(single.json()["status"], "skipped")
+                self.assertEqual(client.post("/api/tools/apktool/install", json={"confirm": False}).status_code, 400)
+                invalid = client.post("/api/tools/does-not-exist/install", json={"confirm": True})
+                self.assertEqual(invalid.status_code, 400)
+                self.assertEqual(client.get("/api/tools/jobs/not-a-real-job").status_code, 404)
+                installed = client.get("/api/tools/installed")
+                self.assertEqual(installed.status_code, 200)
+                self.assertEqual(installed.json()["count"], 0)
+                self.assertEqual(client.post("/api/tools/installed/sync", json={"confirm": False}).status_code, 400)
+                web = client.post("/api/tools/web/apktool", json={"confirm": True})
+                self.assertEqual(web.status_code, 200)
+                self.assertEqual(web.json()["status"], "skipped")
+                mobsf_web = client.post("/api/tools/web/mobsf", json={"confirm": True})
+                self.assertEqual(mobsf_web.status_code, 200)
+                self.assertIn("installed", mobsf_web.json())
+                self.assertIn("Local install check", mobsf_web.json()["detail"])
+                shell_help = client.post("/api/tools/shell", json={"command": "help", "confirm": True})
+                self.assertEqual(shell_help.status_code, 200)
+                self.assertIn("apktool install", shell_help.json()["output"])
+                self.assertEqual(shell_help.json()["level"], "info")
+                self.assertEqual(client.post("/api/tools/shell", json={"command": "rm -rf /"}).status_code, 400)
+                self.assertEqual(client.post(
+                    "/api/tools/shell", json={"command": "apktool install", "confirm": False}
+                ).status_code, 400)
+                dashboard = client.get("/tools/dashboard")
+                self.assertEqual(dashboard.status_code, 200)
+                self.assertIn("For authorized security testing only", dashboard.text)
+                self.assertIn("Installed software dashboard", dashboard.text)
+                self.assertIn("Tool access", dashboard.text)
+                self.assertIn("Decode &amp; inspect", dashboard.text)
+                self.assertIn('data-group="decode"', dashboard.text)
+                self.assertIn("tool-card", dashboard.text)
+                self.assertIn("runToolAction", dashboard.text)
+                self.assertIn("showWhy", dashboard.text)
+                self.assertIn("Why no install button", dashboard.text)
+                self.assertIn('id="auto-term"', dashboard.text)
+                self.assertIn("Live tool job terminal", dashboard.text)
+                self.assertIn("showAutoTerm", dashboard.text)
+                self.assertIn("closes automatically when the job finishes", dashboard.text)
+                main_page = client.get("/")
+                self.assertEqual(main_page.status_code, 200)
+                self.assertIn("tool-access", main_page.text)
+                self.assertIn("tool-card", main_page.text)
+                self.assertIn("data-tool-group", main_page.text)
+                self.assertIn('id="auto-term"', main_page.text)
+                self.assertIn("autoTermShow", main_page.text)
+                self.assertIn("drag corner to resize", main_page.text)
+                self.assertIn("toolResultMessage", main_page.text)
+                self.assertIn("data-tool-why", main_page.text)
+                self.assertIn("installable", main_page.text)
+
+    def test_installed_inventory_and_html_dashboard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            executable = root / "apktool.bat"
+            with patch.multiple(
+                config,
+                INSTALLED_DB_PATH=root / "installed_tools.db",
+                TOOLS_ROOT=root / "tools",
+                ANDROID_SDK_ROOT=root / "android-sdk",
+                BROWSER_OPEN_ENABLED=False,
+                MOBSF_URL="",
+                MOBSF_DYNAMIC_URL="",
+                RMS_URL="",
+                ZAP_WEB_URL="http://127.0.0.1:8080",
+            ):
+                self.assertEqual(tool_manager.installed_summary()["count"], 0)
+                record = tool_manager.record_install(
+                    tool_manager.SPEC_BY_ID["apktool"],
+                    {"status": "installed", "version": "2.9.0", "path": str(executable)},
+                    job_id="test-job-1",
+                )
+                self.assertIsNotNone(record)
+                self.assertEqual(record["executable_path"], str(executable))
+                self.assertEqual(record["job_id"], "test-job-1")
+                summary = tool_manager.installed_summary()
+                self.assertEqual(summary["count"], 1)
+                self.assertEqual(summary["tools"][0]["tool_id"], "apktool")
+                page = tool_manager.installed_dashboard_html()
+                self.assertIn("For authorized security testing only", page)
+                self.assertIn("apktool", page)
+                self.assertIn("test-job-1", page)
+                self.assertNotIn("APKPT_BROWSER_OPEN", page)
+                self.assertNotIn("This page lists local tools installed", page)
+                self.assertNotIn("Job log colours", page)
+                self.assertIn("op-work", page)
+                self.assertIn("Tool access", page)
+                self.assertIn("Decode &amp; inspect", page)
+                self.assertIn('data-group="decode"', page)
+                self.assertIn("tool-card", page)
+                self.assertIn("runToolAction", page)
+                blocked = tool_manager.open_web_ui("zaproxy")
+                self.assertEqual(blocked["status"], "skipped")
+                self.assertIn("APKPT_BROWSER_OPEN", blocked["detail"])
+                mobsf = tool_manager.open_web_ui("mobsf")
+                self.assertEqual(mobsf["status"], "skipped")
+                self.assertIn("APKPT_MOBSF_URL", mobsf["detail"])
+
+    def test_shell_command_parser_is_allowlisted(self):
+        help_plan = tool_manager.parse_shell_command("  help  ")
+        self.assertEqual(help_plan["kind"], "message")
+        self.assertIn("For authorized security testing only", help_plan["output"])
+
+        install = tool_manager.parse_shell_command("apktool install")
+        self.assertEqual(install, {"kind": "job", "tool_id": "apktool", "action": "install"})
+
+        update = tool_manager.parse_shell_command("update adb")
+        self.assertEqual(update, {"kind": "job", "tool_id": "platform-tools", "action": "update"})
+
+        batch = tool_manager.parse_shell_command("INSTALL ALL")
+        self.assertEqual(batch, {"kind": "job", "tool_id": "all", "action": "install_all"})
+
+        emulator = tool_manager.parse_shell_command("emulator install")
+        self.assertEqual(emulator, {"kind": "job", "tool_id": "emulator", "action": "install"})
+
+        web = tool_manager.parse_shell_command("open mobsf")
+        self.assertEqual(web, {"kind": "web", "tool_id": "mobsf"})
+
+        for dangerous in ("rm -rf /", "powershell -c whoami", "apktool install && calc", ""):
+            self.assertEqual(tool_manager.parse_shell_command(dangerous)["kind"], "error")
+
+    def test_job_log_severity_colours(self):
+        samples = {
+            "Downloading official release": "work",
+            "Installed apktool 2.9.0": "ok",
+            "HTTP 200 · https://api.github.com": "info",
+            "WARNING: inventory sync failed": "low",
+            "Connection timeout while downloading": "high",
+            "ERROR: source host is not allowlisted": "critical",
+            "No log output.": "dim",
+        }
+        for message, expected in samples.items():
+            self.assertEqual(tool_manager.log_level(message), expected, message)
+        rendered = tool_manager.log_html(list(samples))
+        for level in set(samples.values()):
+            self.assertIn(f"op-{level}", rendered)
+        self.assertIn("&lt;script&gt;", tool_manager.log_html(["<script>alert(1)</script>"]))
+        self.assertNotIn("<script>", tool_manager.log_html(["<script>alert(1)</script>"]))
+
+    def test_tool_manager_retries_transient_502(self):
+        class FakeResponse:
+            def __init__(self, status_code: int) -> None:
+                self.status_code = status_code
+                self.headers: dict[str, str] = {}
+
+            def raise_for_status(self) -> None:
+                return None
+
+        class FakeClient:
+            def __init__(self, codes: list[int]) -> None:
+                self.responses = [FakeResponse(code) for code in codes]
+                self.calls = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def request(self, *_args, **_kwargs):
+                self.calls += 1
+                return self.responses.pop(0)
+
+        url = "https://api.github.com/repos/iBotPeaches/Apktool/releases/latest"
+        with patch.multiple(config, TOOL_MANAGER_RETRIES=3, TOOL_MANAGER_RETRY_DELAY=0), \
+                patch.object(tool_manager.time, "sleep", lambda _seconds: None):
+            client = FakeClient([502, 200])
+            with patch.object(tool_manager, "_client", lambda: client):
+                response = tool_manager._request(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(client.calls, 2)
+
+            client = FakeClient([502, 502, 502])
+            with patch.object(tool_manager, "_client", lambda: client):
+                with self.assertRaises(RuntimeError) as caught:
+                    tool_manager._request(url)
+                self.assertIn("HTTP 502", str(caught.exception))
+                self.assertIn("3 attempt(s)", str(caught.exception))
+                self.assertEqual(client.calls, 3)
+
+
+if __name__ == "__main__":
+    unittest.main()

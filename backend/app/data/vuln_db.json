@@ -1,0 +1,191 @@
+{
+  "_note": "Curated offline heuristic database for demo/offline use. It is NOT exhaustive. Enable APKPT_SCA_ONLINE=1 to enrich results with the public OSV.dev API, and replace this file with a maintained feed for production use.",
+  "_version": "2026-11-18",
+  "components": [
+    {
+      "name": "OkHttp",
+      "osv_name": "com.squareup.okhttp3:okhttp",
+      "ecosystem": "Maven",
+      "markers": ["okhttp3.OkHttpClient", "okhttp3.Request", "com.squareup.okhttp"],
+      "version_patterns": ["okhttp/([0-9]+\\.[0-9]+\\.[0-9]+)", "okhttp3/([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": [
+        {
+          "id": "OFFLINE-ADV-OKHTTP-LEGACY",
+          "severity": "medium",
+          "title": "Outdated OkHttp version with known TLS/HTTP handling issues",
+          "fixed_in": "3.12.0",
+          "description": "OkHttp versions before 3.12.0 are out of maintenance and are affected by multiple historical defects in TLS and HTTP/2 handling.",
+          "remediation": "Upgrade to a currently maintained OkHttp 4.x release.",
+          "references": ["https://square.github.io/okhttp/changelogs/changelog/"]
+        }
+      ]
+    },
+    {
+      "name": "jsoup",
+      "osv_name": "org.jsoup:jsoup",
+      "ecosystem": "Maven",
+      "markers": ["org.jsoup.Jsoup", "org.jsoup.nodes.Document"],
+      "version_patterns": ["jsoup[/-]([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": [
+        {
+          "id": "CVE-2021-37714",
+          "severity": "high",
+          "title": "jsoup denial of service / incomplete parsing",
+          "fixed_in": "1.14.2",
+          "description": "jsoup versions before 1.14.2 are vulnerable to a denial-of-service condition when parsing specially crafted input.",
+          "remediation": "Upgrade jsoup to 1.14.2 or later.",
+          "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-37714"]
+        }
+      ]
+    },
+    {
+      "name": "Guava",
+      "osv_name": "com.google.guava:guava",
+      "ecosystem": "Maven",
+      "markers": ["com.google.common.", "com.google.guava"],
+      "version_patterns": ["guava[/-]([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"],
+      "vulnerabilities": [
+        {
+          "id": "CVE-2020-8908",
+          "severity": "medium",
+          "title": "Guava temporary directory permissions",
+          "fixed_in": "30.0.0",
+          "description": "Guava versions before 30.0.0 create temporary directories with overly permissive permissions, allowing local information disclosure.",
+          "remediation": "Upgrade Guava to 30.0.0 or later and avoid Files.createTempDir().",
+          "references": ["https://nvd.nist.gov/vuln/detail/CVE-2020-8908"]
+        }
+      ]
+    },
+    {
+      "name": "Log4j",
+      "osv_name": "org.apache.logging.log4j:log4j-core",
+      "ecosystem": "Maven",
+      "markers": ["org.apache.logging.log4j", "log4j.core"],
+      "version_patterns": ["log4j[/-]([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": [
+        {
+          "id": "CVE-2021-44228",
+          "severity": "critical",
+          "title": "Log4Shell - remote code execution via JNDI lookups",
+          "fixed_in": "2.15.0",
+          "description": "Log4j 2.0-beta9 through 2.14.1 allows remote code execution when attacker-controlled data is logged. Android usage is less common but must be ruled out.",
+          "remediation": "Upgrade to Log4j 2.15.0+ (prefer 2.17.1+) or remove the dependency.",
+          "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-44228"]
+        }
+      ]
+    },
+    {
+      "name": "Jackson Databind",
+      "osv_name": "com.fasterxml.jackson.core:jackson-databind",
+      "ecosystem": "Maven",
+      "markers": ["com.fasterxml.jackson.databind"],
+      "version_patterns": ["jackson-databind[/-]([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": [
+        {
+          "id": "CVE-2019-12384",
+          "severity": "high",
+          "title": "Jackson-databind deserialization gadget chain",
+          "fixed_in": "2.9.10",
+          "description": "Jackson-databind before 2.9.10 is affected by a deserialization flaw that can lead to information disclosure or code execution when polymorphic handling is enabled.",
+          "remediation": "Upgrade to a maintained 2.x release and disable default typing.",
+          "references": ["https://nvd.nist.gov/vuln/detail/CVE-2019-12384"]
+        }
+      ]
+    },
+    {
+      "name": "Apache Commons IO",
+      "osv_name": "commons-io:commons-io",
+      "ecosystem": "Maven",
+      "markers": ["org.apache.commons.io."],
+      "version_patterns": ["commons-io[/-]([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"],
+      "vulnerabilities": [
+        {
+          "id": "CVE-2021-29425",
+          "severity": "medium",
+          "title": "Commons IO path traversal",
+          "fixed_in": "2.7.0",
+          "description": "Commons IO before 2.7.0 contains a path-traversal flaw in FilenameUtils.normalize on Windows.",
+          "remediation": "Upgrade Commons IO to 2.7.0 or later.",
+          "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-29425"]
+        }
+      ]
+    },
+    {
+      "name": "Bouncy Castle",
+      "osv_name": "org.bouncycastle:bcprov-jdk15on",
+      "ecosystem": "Maven",
+      "markers": ["org.bouncycastle.crypto", "org.spongycastle.crypto"],
+      "version_patterns": ["bcprov[/-]([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"],
+      "vulnerabilities": [
+        {
+          "id": "OFFLINE-ADV-BC-LEGACY",
+          "severity": "medium",
+          "title": "Outdated Bouncy Castle / Spongy Castle provider",
+          "fixed_in": "1.68.0",
+          "description": "Old Bouncy Castle and Spongy Castle releases contain historical cryptographic weaknesses and are no longer maintained.",
+          "remediation": "Upgrade to a maintained Bouncy Castle release (1.68+ / 2.x).",
+          "references": ["https://www.bouncycastle.org/releases/"]
+        }
+      ]
+    },
+    {
+      "name": "libwebp",
+      "osv_name": "libwebp",
+      "ecosystem": "OSS-Fuzz",
+      "markers": [],
+      "native_libraries": ["libwebp.so", "libwebp_dec.so"],
+      "version_patterns": ["libwebp[/-]([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": [
+        {
+          "id": "CVE-2023-4863",
+          "severity": "critical",
+          "title": "libwebp heap buffer overflow (lossless WebP decoding)",
+          "fixed_in": "1.3.2",
+          "description": "A heap overflow in libwebp can be triggered by a crafted WebP image and has been exploited in the wild.",
+          "remediation": "Update the bundled libwebp to 1.3.2+ or rely on an updated system WebView/ImageDecoder.",
+          "references": ["https://nvd.nist.gov/vuln/detail/CVE-2023-4863"]
+        }
+      ]
+    },
+    {
+      "name": "Retrofit",
+      "osv_name": "com.squareup.retrofit2:retrofit",
+      "ecosystem": "Maven",
+      "markers": ["retrofit2.Retrofit", "com.squareup.retrofit2"],
+      "version_patterns": ["retrofit[/-]([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": []
+    },
+    {
+      "name": "Gson",
+      "osv_name": "com.google.code.gson:gson",
+      "ecosystem": "Maven",
+      "markers": ["com.google.gson.Gson", "com.google.gson.reflect"],
+      "version_patterns": ["gson[/-]([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"],
+      "vulnerabilities": []
+    },
+    {
+      "name": "Glide",
+      "osv_name": "com.github.bumptech.glide:glide",
+      "ecosystem": "Maven",
+      "markers": ["com.bumptech.glide.Glide"],
+      "version_patterns": ["glide[/-]([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": []
+    },
+    {
+      "name": "Firebase SDK",
+      "osv_name": "com.google.firebase:firebase-core",
+      "ecosystem": "Maven",
+      "markers": ["com.google.firebase.FirebaseApp", "com.google.firebase.auth"],
+      "version_patterns": ["firebase[/-]([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": []
+    },
+    {
+      "name": "AndroidX WebKit",
+      "osv_name": "androidx.webkit:webkit",
+      "ecosystem": "Maven",
+      "markers": ["androidx.webkit.WebViewCompat"],
+      "version_patterns": ["webkit[/-]([0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "vulnerabilities": []
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "rules": [
+    {
+      "id": "DEBUG-ENDPOINT",
+      "title": "Custom: debug/staging endpoint referenced",
+      "severity": "low",
+      "scope": "strings",
+      "pattern": "(?i)(debug|staging|dev|test|internal)\\.?[a-z0-9-]*\\.(example|local|internal|corp)\\b",
+      "description": "A hostname that appears to be a non-production endpoint was found in the APK.",
+      "remediation": "Remove development endpoints from production builds or protect them with authentication.",
+      "confidence": "low",
+      "category": "CUSTOM"
+    },
+    {
+      "id": "PREMIUM-SMS",
+      "title": "Custom: premium-rate SMS number",
+      "severity": "medium",
+      "scope": "strings",
+      "pattern": "(?i)sendTextMessage\\s*\\(\\s*[\"']([1-9]\\d{4,})[\"']",
+      "description": "A hardcoded destination number was found next to an SMS-sending API. Premium-rate numbers can cause financial loss.",
+      "remediation": "Remove premium-rate destinations, require explicit user confirmation and use a backend for billing operations.",
+      "cwe": "CWE-840",
+      "confidence": "medium",
+      "category": "CUSTOM"
+    },
+    {
+      "id": "HARDCODED-IV",
+      "title": "Custom: hardcoded cryptographic IV",
+      "severity": "medium",
+      "scope": "strings",
+      "pattern": "(?i)(IvParameterSpec|GCMParameterSpec)\\s*\\(\\s*new\\s+byte\\s*\\[\\s*\\d+\\s*\\]",
+      "description": "A cryptographic IV appears to be constructed from a fixed byte array.",
+      "remediation": "Generate a random IV for every encryption operation and store it alongside the ciphertext.",
+      "cwe": "CWE-329",
+      "masvs": "MASVS-CRYPTO-1",
+      "confidence": "low",
+      "category": "CUSTOM"
+    }
+  ]
+}

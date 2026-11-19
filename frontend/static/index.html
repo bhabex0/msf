@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>APK Pentest Platform</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230ea5e9'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-size='26' font-family='Arial' font-weight='bold' fill='%2304121f'%3EAPK%3C/text%3E%3C/svg%3E">
+<style>
+:root{--bg:#0b1120;--side:#0f172a;--panel:#131c31;--panel2:#18243c;--line:#24334f;--text:#e6edf7;--muted:#8b9bb4;--accent:#38bdf8;--crit:#f04438;--high:#f97066;--med:#fdb022;--low:#53b1fd;--info:#98a2b3;--green:#12b76a;--work:#39ff14;--normal:#4ade80;--op-low:#facc15;--op-high:#fb923c;--op-info:#60a5fa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+button,input{font:inherit}button{cursor:pointer}a{color:var(--accent)}
+.shell{display:flex;min-height:100vh}
+.sidebar{width:300px;flex:0 0 300px;background:var(--side);border-right:1px solid var(--line);padding:20px 16px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:12px}.mark{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#0ea5e9,#4338ca);font-weight:800}
+.bt{font-weight:700}.bs{color:var(--muted);font-size:11px;letter-spacing:.08em}
+.drop{border:1.5px dashed #34445f;border-radius:12px;padding:18px 12px;text-align:center;background:#111c31}.drop.drag{border-color:var(--accent);background:#102a43}
+.drop .ic{font-size:24px;color:var(--accent)}.drop .t{font-weight:600;margin:2px 0 8px}.browse{color:var(--accent);cursor:pointer}.browse input{display:none}
+.sel{display:flex;gap:8px;align-items:center;background:#16233b;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;margin-top:8px}.sel span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sel button{background:var(--accent);color:#04121f;border:0;border-radius:6px;padding:5px 12px;font-weight:700}
+.list-title{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;display:flex;justify-content:space-between}
+.scans{display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:36vh}
+.scan{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:#111c31;cursor:pointer}
+.scan:hover{border-color:#3d5378}.scan.active{border-color:var(--accent);background:#12263d}
+.scan .n{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
+.scan .m{display:flex;gap:6px;align-items:center;margin-top:3px}.scan .p{color:var(--muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
+.scan .score{font-weight:800;color:var(--med)}.del{background:transparent;border:0;color:var(--muted);font-size:18px;line-height:1}.del:hover{color:var(--crit)}
+.empty-list{color:var(--muted);font-size:12px;padding:12px 4px}
+.engines{margin-top:auto;border-top:1px solid var(--line);padding-top:12px}.engines h4{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px}
+.er{display:flex;gap:8px;align-items:center;font-size:12px;padding:2px 0}.er .v{margin-left:auto;color:var(--muted);font-size:11px}
+.dot{width:7px;height:7px;border-radius:50%;background:#475467}.dot.on{background:var(--green);box-shadow:0 0 8px #12b76a88}
+.tools{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.tool{font-size:9px;border:1px solid var(--line);color:#64748b;border-radius:99px;padding:1px 6px}.tool.on{color:var(--green);border-color:#0d6b45}
+.main{flex:1;min-width:0;padding:28px 34px 80px;max-width:1500px}
+.banner{padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px}.banner.err,.banner.critical{background:#451b1b;color:#ff6b6b;border:1px solid #7a2e2e;cursor:pointer}.banner.info{background:#12283f;border:1px solid var(--line);color:var(--op-info)}.banner.ok{background:#0b3324;border:1px solid #166534;color:#a7f3d0}.banner.work{background:#053e21;border:1px solid #15803d;color:var(--work);box-shadow:0 0 10px #39ff1433}.banner.low{background:#713f12;border:1px solid #a16207;color:#fde68a}.banner.high{background:#7c2d12;border:1px solid #c2410c;color:#fdba74}
+.welcome{max-width:820px;margin:8vh auto;text-align:center}.welcome .ic{font-size:56px;color:var(--accent)}.welcome h1{font-size:30px;margin:8px 0}.welcome p{color:var(--muted);max-width:640px;margin:0 auto 28px}
+.wgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;text-align:left}.wgrid>div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}.wgrid strong{display:block;color:var(--accent);margin-bottom:6px}.wgrid span{color:var(--muted);font-size:12px}
+.prog{text-align:center;margin:16vh auto;max-width:460px}.spin{width:46px;height:46px;margin:0 auto 16px;border:3px solid var(--line);border-top-color:var(--work);border-radius:50%;box-shadow:0 0 14px #39ff1444;animation:s .9s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+.pbar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;margin:18px 0 6px}.pbar>div{height:100%;background:linear-gradient(90deg,#12b76a,#39ff14);box-shadow:0 0 10px #39ff1488;transition:width .4s}
+.rhead{display:flex;justify-content:space-between;gap:24px}.eyebrow{color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.12em}
+.rhead h1{margin:4px 0 8px;font-size:26px;word-break:break-word}.rsub{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:12px}
+.risk{border:1px solid var(--line);border-radius:14px;padding:12px 20px;text-align:center;min-width:130px;background:var(--panel)}.risk .n{font-size:30px;font-weight:800}.risk .n small{font-size:13px;color:var(--muted)}.risk .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.risk.critical{border-color:var(--crit)}.risk.high{border-color:var(--high)}.risk.medium{border-color:var(--med)}.risk.low{border-color:var(--low)}
+.stats{display:grid;grid-template-columns:repeat(6,minmax(90px,1fr));gap:10px;margin:22px 0}.st{background:var(--panel);border:1px solid var(--line);border-top-width:3px;border-radius:10px;padding:12px;text-align:center}
+.st.critical{border-top-color:var(--crit)}.st.high{border-top-color:var(--high)}.st.medium{border-top-color:var(--med)}.st.low{border-top-color:var(--low)}.st.info{border-top-color:var(--info)}.st.total{border-top-color:var(--accent)}
+.st .n{font-size:22px;font-weight:800}.st .l{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}.tabs button{background:transparent;border:0;color:var(--muted);padding:9px 14px;border-bottom:2px solid transparent;font-weight:600}.tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+.toolbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}.toolbar input{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 12px;min-width:250px}
+.filters{display:flex;gap:5px;flex-wrap:wrap}.filters button{background:var(--panel);border:1px solid var(--line);color:var(--muted);border-radius:99px;padding:4px 10px;font-size:11px}.filters button.active{border-color:var(--accent);color:var(--accent)}
+.f{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--info);border-radius:10px;margin-bottom:10px;overflow:hidden}.f.critical{border-left-color:var(--crit)}.f.high{border-left-color:var(--high)}.f.medium{border-left-color:var(--med)}.f.low{border-left-color:var(--low)}
+.ft{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}.ft:hover{background:#17223a}.ft .title{flex:1;min-width:0}.ft .meta{color:var(--muted);font-size:11px;word-break:break-word}
+.sev{font-size:9px;font-weight:800;text-transform:uppercase;border-radius:4px;padding:3px 7px;min-width:62px;text-align:center;color:#fff;background:var(--info)}
+.sev.critical{background:var(--crit)}.sev.high{background:var(--high);color:#1a0b09}.sev.medium{background:var(--med);color:#241500}.sev.low{background:var(--low);color:#04121f}
+.fb{padding:0 16px 16px 88px;border-top:1px solid var(--line)}.fb p{color:#c6d2e2}
+pre{background:#0a1425;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#a9c7e8;max-height:280px}
+.fix{background:#0c2a22;border-left:3px solid var(--green);padding:10px 12px;border-radius:6px;font-size:13px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em;background:var(--panel2)}tr:last-child td{border-bottom:0}
+.pill{font-size:10px;text-transform:uppercase;padding:2px 8px;border-radius:99px;background:#334155;color:#dbe4f0}
+.pill.running,.pill.installing,.pill.updating,.pill.processing,.pill.pulling{background:#053e21;color:var(--work);box-shadow:0 0 8px #39ff1455}
+.pill.completed,.pill.done,.pill.passed,.pill.ok,.pill.installed,.pill.updated{background:#065f46;color:#a7f3d0}
+.pill.queued,.pill.info{background:#12283f;color:var(--op-info)}
+.pill.failed,.pill.error,.pill.critical{background:#7f1d1d;color:#fecaca}
+.pill.high{background:#7c2d12;color:#fdba74}.pill.low,.pill.warn,.pill.warning,.pill.skipped{background:#713f12;color:#fde68a}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}.mc{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}.mc h3{margin:0 0 12px}.mc h4{margin:18px 0 8px;font-size:12px;color:var(--muted);text-transform:uppercase}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:12px}.kv>span:first-child{color:var(--muted)}.wrap{word-break:break-word}
+.chips{display:flex;flex-wrap:wrap;gap:5px}.chip{background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:3px 9px;font-size:10px;color:#b6c6db}
+.mono,code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.btn{display:inline-block;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 14px;text-decoration:none;font-weight:600}.btn.primary{background:var(--accent);color:#04121f;border-color:var(--accent)}
+.btn.compact{padding:4px 8px;font-size:11px}.btn:disabled{opacity:.45;cursor:not-allowed}
+.manager-link{width:100%;margin-top:10px}.manager-link+.manager-link{margin-top:0}.tool-row td:last-child{white-space:nowrap}
+.tool-access{margin-top:22px}.tool-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.tool-controls input{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 10px;min-width:210px;font-size:12px}
+.tool-filter{background:var(--panel);border:1px solid var(--line);color:var(--muted);border-radius:99px;padding:4px 10px;font-size:11px;cursor:pointer}.tool-filter.active{border-color:var(--accent);color:var(--accent)}
+.tool-groups{display:flex;flex-direction:column;gap:14px}.tool-group{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.tg-head{display:flex;align-items:center;gap:9px;margin-bottom:10px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.tg-icon{width:30px;height:30px;display:grid;place-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font-size:16px}
+.tg-title{flex:1;min-width:0}.tg-title strong{display:block;font-size:13px}.tg-title small{color:var(--muted);font-size:10px}
+.tool-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:9px}
+.tool-card{background:#0f1a2d;border:1px solid var(--line);border-radius:9px;padding:10px;min-width:0}
+.tool-card:hover{border-color:#3d5378}.tool-card.invasive{border-left:3px solid var(--high)}
+.tc-top{display:flex;gap:8px;align-items:flex-start}.tc-icon{font-size:17px;line-height:1.2}
+.tc-title{flex:1;min-width:0}.tc-title strong{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-title small{display:block;color:var(--muted);font-size:10px;font-family:ui-monospace,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-desc{color:var(--muted);font-size:11px;line-height:1.4;margin:8px 0;min-height:30px}
+.tc-meta{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}.tc-actions{display:flex;gap:4px;flex-wrap:wrap}
+.tool-act{display:inline-flex;align-items:center;gap:3px;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:3px 6px;font-size:10px;line-height:1.2;text-decoration:none;cursor:pointer}
+.tool-act:hover{border-color:var(--accent);color:var(--accent)}.tool-act.install{color:var(--work)}.tool-act.update{color:var(--op-info)}.tool-act.verify{color:var(--normal)}.tool-act.web{color:var(--accent)}.tool-act.manual{color:var(--op-low)}
+.advanced-table{margin-top:14px}.advanced-table summary{cursor:pointer;color:var(--muted);font-size:11px}.advanced-table[open] summary{margin-bottom:8px}
+.job{background:#0a1425;border:1px solid var(--line);border-radius:9px;padding:10px;margin-bottom:8px}.job .jh{display:flex;justify-content:space-between;gap:10px;align-items:center}.job .log{margin:8px 0 0;padding:8px;font-size:11px;max-height:150px}
+.muted{color:var(--muted)}.small{font-size:12px}.empty{color:var(--muted);font-style:italic;padding:18px;text-align:center}
+.mini-shell{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.shell-tab{background:#0a1425;border:1px solid var(--accent);color:var(--accent);border-radius:99px;padding:7px 14px;font-weight:700;font-size:12px;box-shadow:0 8px 24px #0008}
+.shell-tab:hover{background:#12283f}
+.shell-panel{width:min(470px,calc(100vw - 36px));height:430px;min-height:260px;max-height:75vh;resize:vertical;background:#08111f;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 48px #000a;display:none;flex-direction:column;overflow:hidden}
+.shell-panel.open{display:flex}
+.shell-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel2)}
+.shell-head strong{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--accent)}
+.shell-head button{background:transparent;border:0;color:var(--muted);font-size:12px;padding:2px 5px}.shell-head button:hover{color:var(--text)}
+.shell-log{flex:1;margin:0;padding:10px 12px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:#a9c7e8;background:#06101d}
+.shell-line.err,.op-critical{color:#ff6b6b}.shell-line.ok{color:var(--normal)}.shell-line.dim,.op-dim{color:var(--muted)}
+.op-line{display:block;padding:0 3px;border-left:2px solid transparent}
+.op-critical{border-left-color:#ef4444}.op-high{color:var(--op-high);border-left-color:#f97316}
+.op-low{color:var(--op-low);border-left-color:#eab308}.op-info{color:var(--op-info);border-left-color:#3b82f6}
+.op-work{color:var(--work);border-left-color:var(--work);text-shadow:0 0 6px #39ff1477}
+.op-ok{color:var(--normal);border-left-color:#22c55e}
+.shell-input-row{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line);background:var(--panel)}
+.shell-input{flex:1;min-width:0;background:#0a1425;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:7px 9px;outline:none}
+.shell-input:focus{border-color:var(--accent)}
+.shell-hint{font-size:10px;color:var(--muted);padding:0 10px 8px;background:var(--panel)}
+.auto-term{position:fixed;top:16px;right:18px;bottom:16px;width:min(520px,42vw);z-index:70;background:#031309;border:1px solid var(--work);border-radius:12px;box-shadow:0 0 28px #39ff1455,0 16px 48px #000b;display:none;flex-direction:column;overflow:hidden;animation:autoTermIn .18s ease-out}
+.auto-term.open{display:flex}
+@keyframes autoTermIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+.at-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid #1d5b32;background:#062116;color:var(--work)}
+.at-head strong{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+.at-dot{display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:var(--work);box-shadow:0 0 10px var(--work);animation:atPulse 1.1s ease-in-out infinite}
+@keyframes atPulse{50%{opacity:.35}}
+.at-head button{background:transparent;border:0;color:var(--work);font-size:15px;line-height:1;padding:2px 6px}
+.at-head button:hover{color:#fff}
+.at-log{flex:1;min-height:0;margin:0;padding:12px 13px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--work);background:#020e08;text-shadow:0 0 6px #39ff1466}
+.at-line{display:block}
+.at-line.op-work{color:var(--work)}.at-line.op-ok{color:var(--normal)}.at-line.op-info{color:var(--op-info)}
+.at-line.op-low{color:var(--op-low)}.at-line.op-high{color:var(--op-high)}.at-line.op-critical{color:#ff6b6b}.at-line.op-dim{color:var(--muted)}
+.at-foot{padding:8px 13px;border-top:1px solid #1d5b32;background:#062116;color:#9bd8ad;font-size:10px}
+@media(max-width:1000px){.shell{flex-direction:column}.sidebar{width:100%;flex-basis:auto;position:static;height:auto}.main{padding:20px}.stats{grid-template-columns:repeat(3,1fr)}.fb{padding-left:16px}}
+@media(max-width:600px){.mini-shell{right:8px;bottom:8px}.shell-panel{width:calc(100vw - 16px);height:340px;max-height:65vh}.auto-term{width:calc(100vw - 16px);right:8px;top:8px;bottom:8px}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="mark">APK</div><div><div class="bt">Pentest Platform</div><div class="bs">SAST · SCA · DAST</div></div></div>
+    <div>
+      <div class="drop" id="drop"><div class="ic">↑</div><div class="t">Drop an APK here</div><label class="browse">or browse<input type="file" id="file" accept=".apk"></label></div>
+      <div class="sel" id="sel" style="display:none"><span id="selname"></span><button id="submit">Scan</button></div>
+    </div>
+    <div class="list-title"><span>Scan history</span><button style="background:none;border:0;color:var(--muted)" id="refresh">↻</button></div>
+    <div class="scans" id="scans"><div class="empty-list">No scans yet</div></div>
+    <button class="btn manager-link" id="open-manager">Tools &amp; emulator manager</button>
+    <a class="btn manager-link" href="/tools/dashboard">Installed software dashboard</a>
+    <div class="engines">
+      <h4>Engine status</h4><div id="engines"><div class="muted">Connecting…</div></div>
+    </div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<div class="mini-shell" id="mini-shell">
+  <div class="shell-panel" id="shell-panel" role="region" aria-label="Tool shell">
+    <div class="shell-head">
+      <span><strong>shell</strong> <span class="muted small">allowlisted · gated</span></span>
+      <span><button id="shell-pin" title="Keep open">pin</button><button id="shell-clear" title="Clear terminal">clear</button><button id="shell-close" title="Hide shell">×</button></span>
+    </div>
+    <pre class="shell-log" id="shell-log"></pre>
+    <div class="shell-input-row">
+      <input class="shell-input" id="shell-input" placeholder="apktool install · install all · help" autocomplete="off" spellcheck="false" aria-label="Shell command">
+      <button class="btn compact" id="shell-run">Run</button>
+    </div>
+    <div class="shell-hint">help · status · jobs · sync · open mobsf · ↑/↓ history · Esc hides · auto-hides after 30s · drag corner to resize<br>green work/success · blue info · yellow low · orange high · red critical · authorized use only</div>
+  </div>
+  <button class="shell-tab" id="shell-tab" title="Toggle shell">›_ shell</button>
+</div>
+<div class="auto-term" id="auto-term" role="region" aria-label="Live tool job terminal" aria-live="polite">
+  <div class="at-head">
+    <span><span class="at-dot" aria-hidden="true"></span><strong id="at-title">tool job</strong> <span class="muted small" id="at-status">running</span></span>
+    <button id="at-close" title="Hide live terminal">×</button>
+  </div>
+  <pre class="at-log" id="at-log"></pre>
+  <div class="at-foot">For authorized security testing only · closes automatically when the job finishes</div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s)
+const esc = (v) => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+const SEV = ['critical','high','medium','low','info']
+let state = { health:null, scans:[], active:null, record:null, timer:null, tab:'Findings', filter:'all', query:'', view:'scan', catalog:null, jobs:[], installed:[], jobTimer:null, toolMsg:'', toolMsgLevel:'', pkiMsg:'', pkiMsgLevel:'info', toolQuery:'', toolGroup:'all', shell:{open:false,pinned:false,lines:[],jobId:null,lastLog:0,timer:null,hideTimer:null,history:[],historyIndex:0}, autoTerm:{jobId:null,lines:[],label:'',status:'',finished:false,hideTimer:null,timer:null} }
+
+const sleep=(ms)=>new Promise(r=>setTimeout(r,ms))
+async function api(path, options={}) {
+  const method=(options.method||'GET').toUpperCase()
+  const retries=['GET','HEAD','OPTIONS'].includes(method)?2:0
+  for (let attempt=0; ; attempt++) {
+    let r
+    try { r=await fetch(path, options) }
+    catch(e) {
+      if (attempt<retries) { await sleep(400*(attempt+1)); continue }
+      throw new Error(`Network error for ${path}: ${e.message||e}`)
+    }
+    if (r.ok) return r.json()
+    let detail=''
+    try { const body=await r.json(); detail=body.detail||JSON.stringify(body) }
+    catch { try { detail=(await r.text()).slice(0,300) } catch {} }
+    if ([502,503,504].includes(r.status) && attempt<retries) { await sleep(400*(attempt+1)); continue }
+    throw new Error(`${r.status} ${r.statusText||'Request failed'} for ${path}: ${detail||'no response body'}`)
+  }
+}
+
+async function loadScans() {
+  state.scans = await api('/api/scans')
+  renderScans()
+  if (!state.active && state.scans.length) select(state.scans[0].scan_id)
+}
+
+async function select(id) {
+  state.active = id; state.view='scan'; state.tab='Findings'; state.filter='all'; state.query=''
+  renderScans(); await loadRecord()
+  if (state.timer) clearInterval(state.timer)
+  state.timer = setInterval(async () => {
+    if (!state.active) return
+    const d = await loadRecord()
+    if (d && !['queued','running'].includes(d.status)) { clearInterval(state.timer); loadScans() }
+  }, 1200)
+}
+
+async function loadRecord() {
+  try {
+    state.record = await api('/api/scans/'+state.active)
+    renderMain(); return state.record
+  } catch(e) { renderError(e.message); return null }
+}
+
+function renderScans() {
+  const el = $('#scans')
+  if (!state.scans.length) { el.innerHTML='<div class="empty-list">No scans yet</div>'; return }
+  el.innerHTML = state.scans.map(s => `
+    <div class="scan ${s.scan_id===state.active?'active':''}" data-id="${s.scan_id}">
+      <div><div class="n" title="${esc(s.filename)}">${esc(s.filename)}</div>
+      <div class="m"><span class="pill ${s.status}">${esc(s.status)}</span><span class="p" title="${esc(s.package||'')}">${esc(s.package||'')}</span></div></div>
+      <div class="score">${s.status==='completed'?esc(s.risk_score):'—'}</div>
+      <button class="del" data-del="${s.scan_id}" title="Delete">×</button>
+    </div>`).join('')
+  el.querySelectorAll('.scan').forEach(n => n.onclick = () => select(n.dataset.id))
+  el.querySelectorAll('[data-del]').forEach(n => n.onclick = async (e) => {
+    e.stopPropagation(); await api('/api/scans/'+n.dataset.del, {method:'DELETE'})
+    if (state.active===n.dataset.del) { state.active=null; state.record=null; clearInterval(state.timer) }
+    loadScans(); renderMain()
+  })
+}
+
+function renderError(msg) { $('#main').innerHTML = `<div class="banner err" onclick="this.remove()">${esc(msg)}</div>` }
+
+function renderMain() {
+  if (state.view==='tools') { renderToolManager(); return }
+  const r = state.record
+  if (!r) {
+    $('#main').innerHTML = `<div class="welcome"><div class="ic">◇</div><h1>Upload an APK to begin</h1>
+      <p>The platform unpacks the APK, inspects the manifest and DEX strings, matches vulnerable components, and — when a device is connected — runs dynamic checks. Reports are generated as self-contained HTML and JSON.</p>
+      <div class="wgrid">
+        <div><strong>Static analysis</strong><span>Permissions, exported components, debuggable flags, secrets, TLS bypasses, WebView and crypto issues.</span></div>
+        <div><strong>Composition analysis</strong><span>Detect bundled libraries and match known vulnerabilities using an offline database and OSV.dev.</span></div>
+        <div><strong>Dynamic analysis</strong><span>adb-driven install/launch/logcat checks, intent fuzzing, deep-link tests, optional Frida hooks and proxy capture.</span></div>
+        <div><strong>Advanced analysis</strong><span>Deep links, NSC hardening, native ELF hardening, trackers, packers, attack chains, compliance mapping and live checks.</span></div>
+        <div><strong>PKI &amp; signing</strong><span>Signing certificate fingerprints, algorithm/key-size checks, TLS trust configuration and local lab CA/keystore controls.</span></div>
+        <div><strong>Enterprise exports</strong><span>CycloneDX SBOM, SARIF, policy gates, scan diffing, custom rules, optional auth and an append-only audit log.</span></div>
+        <div><strong>Medical / PHI focus</strong><span>Masked clinical-identifier detection, HIPAA/GDPR/FDA/IEC 62304 evidence mapping and healthcare control gaps.</span></div>
+        <div><strong>Advanced toolchain &amp; lab</strong><span>APKHunt, APKLeaks, AppScan, MobSF dynamic, TrashDroid, Burp/ZAP/mitmproxy, Chromium and patching plans.</span></div>
+        <div><strong>Tool manager</strong><span>One-click install/update jobs, per-tool repository pull, source verification and Android emulator setup with live logs.</span></div>
+      </div><p class="muted small" style="margin-top:24px">For authorized security testing only. Heuristic findings require manual verification. Medical mappings are not certifications.</p></div>`
+    return
+  }
+  if (['queued','running'].includes(r.status)) {
+    $('#main').innerHTML = `<div class="prog"><div class="spin"></div><h2>Scanning APK…</h2><p class="muted">${esc(r.stage||'starting')}</p>
+      <div class="pbar"><div style="width:${r.progress||0}%"></div></div><p class="muted">${r.progress||0}%</p></div>`
+    return
+  }
+  if (r.status==='failed') { $('#main').innerHTML = `<div class="banner err">Scan failed: ${esc(r.error)}</div>`+resultHead(r); return }
+  $('#main').innerHTML = resultHead(r) + tabs(r) + tabContent(r)
+}
+
+function resultHead(r) {
+  const s=r.summary||{}, m=r.manifest||{}
+  return `<div class="rhead"><div><div class="eyebrow">Scan report</div><h1>${esc(m.package||r.filename)}</h1>
+    <div class="rsub"><span>${esc(r.filename)}</span><span>v${esc(m.version_name||'?')} (${esc(m.version_code??'?')})</span>
+    <span>target SDK ${esc(m.target_sdk??'?')}</span><span class="mono">${esc((r.sha256||'').slice(0,16))}…</span></div></div>
+    <div class="risk ${esc((s.risk_label||'').toLowerCase())}"><div class="n">${s.risk_score??0}<small>/100</small></div><div class="l">${esc(s.risk_label||'Unknown')} risk</div></div></div>
+    <div class="stats">${SEV.map(x=>`<div class="st ${x}"><div class="n">${s[x]??0}</div><div class="l">${x}</div></div>`).join('')}
+    <div class="st total"><div class="n">${s.total??0}</div><div class="l">total</div></div></div>`
+}
+
+function tabs(r) {
+  const names=['Findings','Components','Advanced','PKI','Chains','Medical','Toolchain','Lab','Live','Policy','Dynamic','Tools','Metadata','Diff','Report']
+  return `<div class="tabs">${names.map(n=>`<button class="${state.tab===n?'active':''}" data-tab="${n}">${n}</button>`).join('')}</div>`
+}
+
+function allFindings(r) { return [...(r.findings||[]), ...(r.sca_findings||[])] }
+
+function table(headers, rows, empty='No data available.') {
+  if (!rows.length) return `<div class="empty">${esc(empty)}</div>`
+  return `<div class="tw"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>
+    ${rows.map(row=>`<tr>${row.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}
+  </tbody></table></div>`
+}
+
+function advancedTab(r) {
+  const a=r.advanced||{}, nsc=a.network_config_detail||{}, apkid=a.apkid||{}
+  return `<div class="mgrid">
+    <div class="mc"><h3>Deep links / App Links</h3>${table(['Activity','Scheme','Host','Browsable','autoVerify'], (a.deep_links||[]).map(x=>[x.activity,x.scheme,x.host,x.browsable,x.auto_verified]), 'No deep links declared.')}</div>
+    <div class="mc"><h3>Network security config</h3>${table(['Property','Value'], [
+      ['Resources',(nsc.resources||[]).join(', ')||'none'],['User CA trusted',nsc.user_ca_trusted],
+      ['Debug user CA',nsc.debug_user_ca_trusted],['Cleartext',nsc.cleartext_enabled],
+      ['Pin sets',(nsc.pin_sets||[]).length],['Expired pins',(nsc.expired_pins||[]).length]])}</div>
+    <div class="mc"><h3>Trackers / SDKs</h3>${table(['Category','Name','Evidence'],(a.trackers||[]).map(t=>[t.category,t.name,t.evidence]),'No known trackers.')}</div>
+    <div class="mc"><h3>Packer / anti-analysis</h3><pre>${esc(JSON.stringify(apkid,null,2))}</pre></div>
+    <div class="mc"><h3>Native library hardening</h3>${table(['Library','PIE','NX','RELRO','Canary','Stripped'],(a.elf_hardening||[]).map(l=>[l.name,l.pie,l.nx_stack,l.full_relro,l.canary,l.stripped]),'No native libraries.')}</div>
+    <div class="mc"><h3>Certificate forensics</h3>${table(['Subject','Algorithm','Key size','Self-signed','Expired'],((a.certificate_analysis||{}).signers||[]).map(s=>[s.subject,s.signature_algorithm,s.key_size,s.self_signed,s.expired]))}
+      <h4>Entropy candidates</h4><pre>${esc(JSON.stringify(a.entropy_secrets||[],null,2))}</pre></div>
+  </div>`
+}
+
+function pkiTab(r) {
+  const p=r.pki||{}, raw=r.certificate||{}, s=p.summary||{}, t=p.trust||{}, l=p.lab||{}
+  const signers=p.signers||raw.signers||[]
+  const summary=[['Status',p.status],['Signers',s.signer_count],['v1 signature',s.v1_signature],
+    ['v2/v3 signature',s.v2_or_v3_signature],['v1 only',s.v1_only],
+    ['Flags',JSON.stringify(s.flags||{})],['PKI findings',s.finding_count]]
+  const certRows=signers.map(x=>[x.subject,x.issuer,x.signature_algorithm,
+    `${x.public_key_algorithm||'unknown'}/${x.key_size??'?'}`,x.sha256_fingerprint,(x.flags||[]).join(', ')||'none'])
+  const trust=[['Resource',t.resource],['Cleartext permitted',t.cleartext_traffic_permitted],
+    ['Pinning configured',t.pinning_configured],['User CA trusted',t.user_ca_trusted],
+    ['Domains',JSON.stringify(t.domains||[])]]
+  const ca=l.ca||{}, ks=l.keystore||{}, dev=l.device_installation||{}, tools=l.tools||{}
+  const lab=[['Lab enabled',l.enabled],['Lab directory',l.directory],['CA present',ca.exists],
+    ['CA subject',ca.details?.subject||'—'],['CA SHA-256',ca.details?.sha256_fingerprint||'—'],
+    ['Proxy CA configured',ca.proxy_ca_configured],['Keystore present',ks.exists],
+    ['Device install by platform',dev.performed_by_platform],
+    ['keytool',tools.keytool?.path||'not found'],['openssl',tools.openssl?.path||'not found'],
+    ['apksigner',tools.apksigner?.path||'not found']]
+  const msg=state.pkiMsg?`<div class="banner ${state.pkiMsgLevel==='err'?'err':'info'}">${esc(state.pkiMsg)}</div>`:''
+  return msg+`<div class="mgrid">
+    <div class="mc"><h3>Signing summary</h3>${table(['Property','Value'],summary)}
+      <p class="muted small">${esc(p.notice||'')}</p>
+      <p class="muted small"><strong>Not a malware/threat detection tool.</strong> PKI observations are informational evidence only and never count as threat findings or release-gate failures.</p></div>
+    <div class="mc"><h3>Certificate chain</h3>${table(['Subject','Issuer','Algorithm','Key','SHA-256 fingerprint','Flags'],certRows,'No parsed signing certificate.')}</div>
+    <div class="mc"><h3>TLS trust configuration</h3>${table(['Property','Value'],trust)}</div>
+    <div class="mc"><h3>Local lab material</h3>${table(['Property','Value'],lab)}
+      <div class="toolbar" style="margin-top:14px">
+        <button class="btn" data-pki-action="status">Refresh status</button>
+        <button class="btn primary" data-pki-action="ca-generate">Generate local CA</button>
+        <button class="btn primary" data-pki-action="keystore-generate">Generate keystore</button>
+      </div>
+      <textarea id="pki-pem" rows="3" style="width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px;font-family:monospace" placeholder="Paste a PEM certificate to import (lab use only)"></textarea>
+      <div class="toolbar" style="margin-top:8px"><button class="btn" data-pki-action="ca-import">Import PEM certificate</button></div>
+      <p class="muted small">Local files only. No CA is installed on a device; invasive operations remain separately gated.</p></div>
+  </div>`
+}
+
+async function runPkiAction(action) {
+  state.pkiMsg='Working…'; state.pkiMsgLevel='info'; renderMain()
+  try {
+    const headers={'Content-Type':'application/json'}
+    let result
+    if (action==='status') result=await api('/api/pki/status')
+    else if (action==='ca-generate') result=await api('/api/pki/ca/generate',{method:'POST',headers,body:JSON.stringify({confirm:true})})
+    else if (action==='keystore-generate') result=await api('/api/pki/keystore/generate',{method:'POST',headers,body:JSON.stringify({confirm:true})})
+    else if (action==='ca-import') {
+      const pem=document.querySelector('#pki-pem')?.value.trim()
+      if (!pem) throw new Error('Paste a PEM certificate first.')
+      result=await api('/api/pki/ca/import',{method:'POST',headers,body:JSON.stringify({pem_text:pem,confirm:true})})
+    } else throw new Error(`Unknown PKI action: ${action}`)
+    state.pkiMsg=result.detail||`PKI ${action}: ${result.status}`
+    state.pkiMsgLevel=result.status==='failed'||result.status==='error'?'err':'info'
+    try { const fresh=await api('/api/pki/status'); if(state.record) state.record.pki={...(state.record.pki||{}),lab:fresh} } catch {}
+  } catch(e) {
+    state.pkiMsg=e.message; state.pkiMsgLevel='err'
+  }
+  renderMain()
+}
+
+function chainsTab(r) {
+  const chains=r.attack_chains||[], play=r.playbook||[], c=r.compliance||{}
+  const cov=[...Object.entries(c.masvs_v2_categories||{}).map(([k,v])=>[`MASVS-${k}`,v]),...Object.entries(c.owasp_mobile_top10||{}).filter(([,v])=>v)]
+  return `<div class="mgrid"><div class="mc"><h3>Attack chains</h3>${table(['Chain','Severity','Preconditions'],chains.map(x=>[x.name,x.severity,(x.requires||[]).join(', ')]),'No attack chains identified.')}</div>
+  <div class="mc"><h3>Verification playbook</h3><ol>${play.map(p=>`<li>${esc(p)}</li>`).join('')||'<li class="muted">No steps.</li>'}</ol></div>
+  <div class="mc"><h3>Compliance coverage</h3>${table(['Category','Findings'],cov)}</div></div>`
+}
+
+function medicalTab(r) {
+  const m=r.medical||{}, s=m.standards||{}
+  const rows=[['Status',m.status],['Domain',m.domain],['PHI indicators',m.phi_present?'present':'not detected'],
+    ['Direct identifiers',(m.direct_identifiers||[]).join(', ')||'none'],['Risk level',m.risk_level],
+    ['Framework gaps',s.gap_count??0],['Review items',s.review_count??0]]
+  const phi=(m.phi_indicators||[]).map(p=>[p.label,p.category,p.count_hint,p.evidence])
+  const perms=(m.medical_permissions||[]).map(p=>[p.permission,p.severity,p.reason])
+  const controls=(s.controls||[]).map(c=>[c.title,c.control,c.status,(c.finding_ids||[]).join(', ')||'review'])
+  return `<div class="mgrid">
+    <div class="mc"><h3>Medical overview</h3>${table(['Property','Value'],rows)}
+      <p class="muted small">${esc(m.disclaimer||'Evidence mapping only; not a certification.')}</p></div>
+    <div class="mc"><h3>PHI / clinical indicators (masked)</h3>${table(['Indicator','Category','Count','Evidence'],phi,'No medical indicators detected.')}</div>
+    <div class="mc"><h3>Health-related permissions</h3>${table(['Permission','Severity','Reason'],perms,'No health-related permissions detected.')}</div>
+    <div class="mc"><h3>Standards and controls</h3>${table(['Framework control','Control ID','Status','Mapped findings'],controls,'No mapped controls.')}</div>
+  </div>`
+}
+
+function toolchainTab(r) {
+  const rows=(r.toolchain||[]).map(t=>[t.name,t.category,t.available?'yes':'no',t.ran?'yes':'no',t.invasive?'yes':'no',t.detail])
+  return `<div class="tw"><table><thead><tr><th>Tool</th><th>Category</th><th>Available</th><th>Executed</th><th>Invasive</th><th>Detail</th></tr></thead><tbody>
+    ${rows.length?rows.map(row=>`<tr>${row.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join(''):'<tr><td colspan="6" class="empty">No toolchain data.</td></tr>'}
+  </tbody></table></div><p class="muted small" style="margin-top:12px">Third-party hooks execute only when explicitly enabled and installed. Missing prerequisites are recorded as skips, not errors.</p>`
+}
+
+function labTab(r) {
+  const l=r.emulator||{}, e=l.emulator||{}, p=l.proxy||{}, patch=l.patching||{}
+  const rows=[['Authorization',l.authorization],['Proxy',p.configured?`${p.type} @ ${p.endpoint}`:'not configured'],
+    ['ADB available',e.adb_available],['Devices',(e.devices||[]).join(', ')||'none'],
+    ['Emulator available',e.emulator_available],['CA certificate',(l.ca_installation||{}).path||'not configured'],
+    ['Invasive allowed',e.invasive_allowed]]
+  const cmds=(l.commands||[]).map(c=>[c.name,c.command])
+  const steps=(patch.steps||[]).map(s=>[s.name,s.status,s.available?'yes':'no',s.command])
+  return `<div class="mgrid">
+    <div class="mc"><h3>Interception lab</h3>${table(['Property','Value'],rows)}</div>
+    <div class="mc"><h3>Generated commands</h3>${table(['Step','Command'],cmds,'No lab commands generated.')}</div>
+    <div class="mc"><h3>Network security config notes</h3><ul>${(l.network_security_notes||[]).map(n=>`<li>${esc(n)}</li>`).join('')||'<li class="muted">No NSC notes.</li>'}</ul></div>
+    <div class="mc"><h3>Patch / instrumentation workflows</h3>${table(['Workflow','Status','Available','Command'],steps,'No workflows.')}
+      <p class="muted small">Invasive workflows require explicit opt-in and authentication. They are not silently executed during a scan.</p></div>
+  </div>`
+}
+
+function liveTab(r) {
+  return table(['Check','Status','Detail'],(r.live_checks||[]).map(c=>[c.name,c.status,c.detail]),'Live checks disabled.')
+}
+
+function policyTab(r) {
+  const p=r.policy||{}
+  return `<div class="mc"><h3>Release policy: ${esc((p.status||'not_evaluated').toUpperCase())}</h3>
+    ${table(['Severity','Allowed','Found'],Object.entries(p.actual||{}).map(([k,v])=>[k,(p.thresholds||{})[k],v]))}
+    <h4>Thresholds</h4><pre>${esc(JSON.stringify(p.thresholds||{},null,2))}</pre>
+    ${(p.violations||[]).map(v=>`<p class="fix"><strong>${esc(v.severity)}:</strong> ${esc(v.message)}</p>`).join('')}</div>`
+}
+
+function diffTab(r) {
+  const others=state.scans.filter(s=>s.scan_id!==r.scan_id)
+  return `<div class="mc"><h3>Compare with another scan</h3>
+    ${others.length?`<div class="toolbar"><select id="diffagainst">${others.map(s=>`<option value="${s.scan_id}">${esc(s.filename)} (${esc(s.scan_id)})</option>`).join('')}</select>
+    <button class="btn primary" data-diff="${r.scan_id}">Compare</button></div>`:'<p class="muted">No other scans to compare.</p>'}
+    <div id="diffout"><p class="muted">Select a scan and click Compare.</p></div></div>`
+}
+
+async function loadDiff(current, against) {
+  const out=$('#diffout'); if(!out) return
+  out.innerHTML='<p class="muted">Comparing…</p>'
+  try {
+    const d=await api(`/api/scans/${current}/diff?against=${against}`)
+    const rows=[...d.new.map(f=>['NEW',f.severity,f.title]),...d.resolved.map(f=>['RESOLVED',f.severity,f.title]),...d.changed.map(f=>['CHANGED',f.id,f.fields.join(', ')])]
+    out.innerHTML=`<p class="muted">New ${d.counts.new} · Resolved ${d.counts.resolved} · Changed ${d.counts.changed} · Unchanged ${d.counts.unchanged}</p>`+table(['Change','Severity / ID','Detail'],rows,'No differences.')
+  } catch(e) { out.innerHTML=`<div class="banner err">${esc(e.message)}</div>` }
+}
+
+function tabContent(r) {
+  switch(state.tab) {
+    case 'Findings': return findingsTab(r)
+    case 'Components': return componentsTab(r)
+    case 'Advanced': return advancedTab(r)
+    case 'PKI': return pkiTab(r)
+    case 'Chains': return chainsTab(r)
+    case 'Medical': return medicalTab(r)
+    case 'Toolchain': return toolchainTab(r)
+    case 'Lab': return labTab(r)
+    case 'Live': return liveTab(r)
+    case 'Policy': return policyTab(r)
+    case 'Dynamic': return dastTab(r)
+    case 'Tools': return toolsTab(r)
+    case 'Metadata': return metadataTab(r)
+    case 'Diff': return diffTab(r)
+    case 'Report': return reportTab(r)
+    default: return ''
+  }
+}
+
+function findingsTab(r) {
+  const q=state.query.trim().toLowerCase()
+  const fs=allFindings(r).filter(f=>(state.filter==='all'||f.severity===state.filter) &&
+    (!q||`${f.title} ${f.description} ${f.id} ${f.component||''}`.toLowerCase().includes(q)))
+    .sort((a,b)=>SEV.indexOf(a.severity)-SEV.indexOf(b.severity))
+  return `<div class="toolbar"><input id="q" placeholder="Search findings…" value="${esc(state.query)}">
+    <div class="filters"><button class="${state.filter==='all'?'active':''}" data-f="all">all</button>
+    ${SEV.map(x=>`<button class="${state.filter===x?'active':''}" data-f="${x}">${x} <em>${(r.summary||{})[x]??0}</em></button>`).join('')}</div></div>
+    <div>${fs.length?fs.map(f=>`<article class="f ${esc(f.severity)}">
+      <div class="ft" data-open><span class="sev ${esc(f.severity)}">${esc(f.severity)}</span>
+      <div class="title"><strong>${esc(f.title)}</strong><div class="meta">${esc(f.category)} · ${esc(f.id)}${f.cwe?' · '+esc(f.cwe):''}${f.owasp_masvs?' · '+esc(f.owasp_masvs):''}${f.component?' · '+esc(f.component):''}</div></div><span>▸</span></div>
+      <div class="fb" style="display:none"><p>${esc(f.description)}</p>${f.evidence?`<pre>${esc(f.evidence)}</pre>`:''}
+      <div class="fix"><strong>Remediation</strong> ${esc(f.remediation)}</div>
+      ${(f.references||[]).length?`<div class="small" style="margin-top:10px">${f.references.map(x=>`<a href="${esc(x)}" target="_blank" rel="noreferrer">${esc(x)}</a>`).join('<br>')}</div>`:''}</div>
+    </article>`).join(''):'<div class="empty">No findings match this filter.</div>'}</div>`
+}
+
+function componentsTab(r) {
+  const cs=r.components||[]
+  return `<div class="tw"><table><thead><tr><th>Component</th><th>Version</th><th>Source</th><th>Evidence</th></tr></thead><tbody>
+    ${cs.length?cs.map(c=>`<tr><td><strong>${esc(c.name)}</strong></td><td>${esc(c.version||'unknown')}</td><td>${esc(c.source)}</td><td class="mono small">${esc(c.evidence)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No known components detected.</td></tr>'}
+    </tbody></table></div>
+    ${r.sca_meta?.online_lookup?`<p class="muted small">OSV.dev online lookup enabled · ${r.sca_meta.online_results??0} advisory matches.</p>`:''}`
+}
+
+function dastTab(r) {
+  const ck=r.dast_checks||[], i=r.dast_info||{}
+  return `<div class="banner info">DAST status: <strong>${esc(r.dast_status)}</strong>${i.device_model?` · ${esc(i.device_model)} · Android ${esc(i.android_version)}`:''}</div>
+  <div class="tw"><table><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>
+  ${ck.map(c=>`<tr><td>${esc(c.name)}</td><td><span class="pill ${esc(c.status)}">${esc(c.status)}</span></td><td>${esc(c.detail)}</td></tr>`).join('')}
+  </tbody></table></div>${i.logcat_excerpt?`<details class="small" style="margin-top:14px"><summary class="muted">Logcat excerpt</summary><pre>${esc(i.logcat_excerpt)}</pre></details>`:''}`
+}
+
+function toolsTab(r) {
+  return `<div class="tw"><table><thead><tr><th>Tool</th><th>Available</th><th>Executed</th><th>Detail</th></tr></thead><tbody>
+  ${(r.tools||[]).map(t=>`<tr><td><strong>${esc(t.name)}</strong></td><td>${t.available?'yes':'no'}</td><td>${t.ran?'yes':'no'}</td><td>${esc(t.detail)}</td></tr>`).join('')}
+  </tbody></table></div>`
+}
+
+function metadataTab(r) {
+  const m=r.manifest||{}, c=r.certificate||{}
+  const kv=(k,v)=>`<div class="kv"><span>${esc(k)}</span><span class="wrap">${esc(v)}</span></div>`
+  return `<div class="mgrid"><div class="mc"><h3>Manifest</h3>
+    ${kv('Package',m.package)}${kv('Version',`${m.version_name||'?'} (${m.version_code??'?'})`)}${kv('Min SDK',m.min_sdk)}${kv('Target SDK',m.target_sdk)}
+    ${kv('Debuggable',String(m.debuggable))}${kv('Allow backup',String(m.allow_backup))}${kv('Cleartext',String(m.uses_cleartext_traffic))}${kv('SHA-256',r.sha256)}
+    <h4>Permissions (${(m.permissions||[]).length})</h4><div class="chips">${(m.permissions||[]).map(p=>`<span class="chip">${esc(p)}</span>`).join('')}</div></div>
+    <div class="mc"><h3>Signing certificate</h3>${kv('v1 signature',String(c.v1_signature))}${kv('v2/v3 signature',String(c.v2_or_v3_signature))}
+    ${(c.signers||[]).map(s=>`<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">${kv('Subject',s.subject)}${kv('Issuer',s.issuer)}${kv('Serial',s.serial_hex)}${kv('Valid until',s.valid_until)}</div>`).join('')}
+    <h4>APK contents (${(r.apk_files||[]).length})</h4><div class="small muted" style="max-height:160px;overflow-y:auto">${(r.apk_files||[]).slice(0,60).map(f=>`<div class="mono">${esc(f)}</div>`).join('')}</div></div></div>`
+}
+
+function reportTab(r) {
+  const id=r.scan_id
+  return `<div style="max-width:640px"><h3>Export report</h3><p class="muted">The HTML report is self-contained and can be shared or printed to PDF.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:18px 0">
+    <a class="btn primary" href="/api/scans/${id}/report.html" target="_blank" rel="noreferrer">Open HTML report</a>
+    <a class="btn" href="/api/scans/${id}/report.html" download="report-${id}.html">Download HTML</a>
+    <a class="btn" href="/api/scans/${id}/report.json" download="report-${id}.json">Download JSON</a>
+    <a class="btn" href="/api/scans/${id}/export/sbom.json" download="sbom-${id}.cdx.json">CycloneDX SBOM</a>
+    <a class="btn" href="/api/scans/${id}/export/sarif.json" download="report-${id}.sarif">SARIF</a>
+    <button class="btn" data-open-mobsf="${id}">Open MobSF in Chromium</button>
+  </div><pre>${esc(JSON.stringify({scan_id:id,package:r.manifest?.package,summary:r.summary,policy:r.policy?.status,finding_count:allFindings(r).length,exports:r.exports},null,2))}</pre></div>`
+}
+
+async function openMobsf(scanId) {
+  try {
+    const result=await api('/api/lab/open-mobsf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scan_id:scanId})})
+    alert(result.detail||`MobSF browser: ${result.status}${result.url?' — '+result.url:''}`)
+  } catch(e) { alert(e.message) }
+}
+
+async function loadToolManager(preserveMsg=false) {
+  try {
+    const [catalog,jobs,inventory]=await Promise.all([
+      api('/api/tools/catalog'), api('/api/tools/jobs'), api('/api/tools/installed')
+    ])
+    state.catalog=catalog; state.jobs=jobs; state.installed=inventory.tools||[]
+    if (!preserveMsg) { state.toolMsg=''; state.toolMsgLevel='' }
+  } catch(e) { state.toolMsg=e.message; state.toolMsgLevel='critical' }
+  renderToolManager()
+  ensureJobPoller()
+}
+
+function jobsHtml() {
+  if (!state.jobs.length) return '<div class="empty">No tool jobs yet.</div>'
+  return state.jobs.map(j=>`<div class="job"><div class="jh"><div>
+    <strong>${esc(j.tool_id)}</strong> <span class="muted small">${esc(j.action)} · ${esc(j.job_id)}</span>
+    <div class="small">${esc(j.detail||'')}</div></div>
+    <span class="pill ${esc(levelForStatus(j.status,j.action))}">${esc(j.status)}</span></div>
+    <pre class="log">${logLinesHtml(j.logs,40)}</pre></div>`).join('')
+}
+
+function installedHtml() {
+  const items=state.installed||[]
+  if (!items.length) return '<div class="empty">No installed software recorded yet. Run an install job or sync the catalog.</div>'
+  return `<div class="tw"><table><thead><tr><th>Tool</th><th>Version</th><th>Executable</th><th>Setup / archive</th><th>Web UI</th><th>Job</th></tr></thead><tbody>${items.map(r=>{
+    const id=String(r.tool_id||'')
+    const web=r.web_url?`<a class="btn compact" href="${esc(r.web_url)}" target="_blank" rel="noreferrer">Direct link</a> `:'';
+    return `<tr><td><strong>${esc(r.name||id)}</strong><div class="muted small mono">${esc(id)}</div></td>
+      <td>${esc(r.version||'—')}</td><td class="mono small wrap">${esc(r.executable_path||'—')}</td>
+      <td class="mono small wrap">${esc(r.setup_path||'—')}</td>
+      <td>${web}<button class="btn compact" data-tool-web="${esc(id)}">Open (gated)</button></td>
+      <td class="mono small">${esc(r.job_id||'—')}</td></tr>`
+  }).join('')}</tbody></table></div>`
+}
+
+function toolResultLevel(result) {
+  if (result.level) return result.level
+  if (['error','failed','critical'].includes(result.status)) return 'critical'
+  if (result.status==='skipped') return 'low'
+  if (['launched','completed','ok','installed','updated'].includes(result.status)) return 'ok'
+  return 'info'
+}
+
+function toolResultMessage(prefix, result) {
+  const parts=[`${prefix}: ${result.status||'done'}`]
+  if (typeof result.installed==='boolean') {
+    parts.push(result.installed
+      ? `installed${result.version?' '+result.version:''}`
+      : 'not installed')
+  }
+  if (result.detail) parts.push(result.detail)
+  if (result.url) parts.push(result.url)
+  return parts.join(' · ')
+}
+
+async function openToolWeb(toolId) {
+  try {
+    const result=await api(`/api/tools/web/${encodeURIComponent(toolId)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})})
+    await loadToolManager(true)
+    state.toolMsg=toolResultMessage(`${toolId} web UI`,result)
+    state.toolMsgLevel=toolResultLevel(result)
+    renderToolManager()
+  } catch(e) { state.toolMsg=e.message; state.toolMsgLevel='critical'; renderToolManager() }
+}
+
+async function syncInstalledDb() {
+  try {
+    const result=await api('/api/tools/installed/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})})
+    await loadToolManager()
+    state.toolMsg=`Inventory synced: ${result.added||0} new record(s).`
+    state.toolMsgLevel='ok'; renderToolManager()
+  } catch(e) { state.toolMsg=e.message; state.toolMsgLevel='critical'; renderToolManager() }
+}
+
+function toolActionHtml(tool, action, icon, label) {
+  return `<button class="tool-act ${action}" data-tool="${esc(tool.id)}" data-tool-action="${action}" title="${label} ${esc(tool.name)}"><span aria-hidden="true">${icon}</span>${label}</button>`
+}
+
+function toolWhyHtml(tool, reason) {
+  return `<button class="tool-act" data-tool-why="${esc(tool.id)}" data-reason="${esc(reason)}" title="Why no auto-install button?"><span aria-hidden="true">ⓘ</span>Why</button>`
+}
+
+function toolCardHtml(tool) {
+  const status=tool.installed?'installed':'missing'
+  const reason=tool.install_block_reason||tool.install_note||'Manual installation only.'
+  const blocked=tool.installable===false
+  const acts=[]
+  if (blocked) {
+    acts.push(`<span class="tool-act manual" title="${esc(reason)}"><span aria-hidden="true">⚠</span>${tool.manual?'Manual':'Unavailable'}</span>`)
+    acts.push(toolActionHtml(tool,'verify','✓','Verify'))
+    acts.push(toolWhyHtml(tool,reason))
+  } else {
+    if (!tool.installed) acts.push(toolActionHtml(tool,'install','↓','Install'))
+    acts.push(toolActionHtml(tool,'update','↻','Update'))
+    if (tool.method==='git') acts.push(toolActionHtml(tool,'pull','⟲','Pull'))
+    acts.push(toolActionHtml(tool,'verify','✓','Verify'))
+  }
+  if (tool.web_open) acts.push(`<button class="tool-act web" data-tool-web="${esc(tool.id)}" title="Open configured web UI for ${esc(tool.name)}"><span aria-hidden="true">↗</span>Web UI</button>`)
+  acts.push(`<a class="tool-act" href="${esc(tool.source_url)}" target="_blank" rel="noreferrer" title="Official source for ${esc(tool.name)}"><span aria-hidden="true">🔗</span>Source</a>`)
+  return `<article class="tool-card ${tool.invasive?'invasive':''}">
+    <div class="tc-top"><span class="tc-icon" aria-hidden="true">${esc(tool.icon||'•')}</span>
+      <div class="tc-title"><strong>${esc(tool.name)}</strong><small>${esc(tool.id)} · v${esc(tool.version||'—')}</small></div>
+      <span class="pill ${tool.installed?'completed':'skipped'}">${status}</span></div>
+    <div class="tc-desc">${esc(tool.description||'')}</div>
+    <div class="tc-meta"><span class="chip">${esc(tool.category)}</span>${blocked?`<span class="pill low">${tool.manual?'manual':'unavailable'}</span>`:''}${tool.invasive?'<span class="pill high">invasive</span>':''}</div>
+    <div class="tc-actions">${acts.join('')}</div>
+  </article>`
+}
+
+function toolGroupsHtml() {
+  const c=state.catalog||{}
+  const q=state.toolQuery.trim().toLowerCase()
+  const tools=(c.tools||[]).filter(t=>{
+    const matchGroup=state.toolGroup==='all'||t.group===state.toolGroup
+    const haystack=`${t.name} ${t.id} ${t.category} ${t.description} ${t.group_title}`.toLowerCase()
+    return matchGroup && (!q || haystack.includes(q))
+  })
+  const groups=(c.groups||[]).map(g=>{
+    if (state.toolGroup!=='all' && state.toolGroup!==g.id) return ''
+    const items=tools.filter(t=>t.group===g.id)
+    if (!items.length) return ''
+    return `<section class="tool-group" data-group="${esc(g.id)}">
+      <div class="tg-head"><span class="tg-icon" aria-hidden="true">${esc(g.icon||'•')}</span>
+        <div class="tg-title"><strong>${g.order}. ${esc(g.title)}</strong><small>${esc(g.hint||'')}</small></div>
+        <span class="pill info">${items.length}</span></div>
+      <div class="tool-cards">${items.map(toolCardHtml).join('')}</div></section>`
+  }).join('')
+  return groups||'<div class="empty">No tools match this filter.</div>'
+}
+
+function renderToolGroups() {
+  const el=$('#tool-groups'); if (el) el.innerHTML=toolGroupsHtml()
+  const q=state.toolQuery.trim().toLowerCase()
+  const visible=(state.catalog?.tools||[]).filter(t=>{
+    if (state.toolGroup!=='all' && t.group!==state.toolGroup) return false
+    const haystack=`${t.name} ${t.id} ${t.category} ${t.description} ${t.group_title}`.toLowerCase()
+    return !q || haystack.includes(q)
+  }).length
+  const count=$('#tool-match-count'); if (count) count.textContent=`${visible} shown`
+}
+
+function renderToolManager() {
+  const c=state.catalog||{}, tools=c.tools||[], jobs=state.jobs||[]
+  const rows=tools.map(t=>{
+    const act=(a,label)=>`<button class="btn compact" data-tool="${esc(t.id)}" data-tool-action="${a}">${label}</button>`
+    const reason=t.install_block_reason||t.install_note||'Manual installation only.'
+    const blocked=t.installable===false
+    let actions
+    if (blocked) {
+      actions=`<span class="muted small">${t.manual?'Manual':'Unavailable'}</span> `+act('verify','Verify')+
+        ` <button class="btn compact" data-tool-why="${esc(t.id)}" data-reason="${esc(reason)}">Why?</button>`
+    } else {
+      actions=(t.installed?'':act('install','Install '))+act('update','Update')
+      if (t.method==='git') actions+=' '+act('pull','Pull')
+      actions+=' '+act('verify','Verify')
+    }
+    if (t.web_open) actions+=` <button class="btn compact" data-tool-web="${esc(t.id)}">Web UI</button>`
+    return `<tr class="tool-row"><td><strong>${esc(t.name)}</strong><div class="small muted">${esc(t.description)}</div>
+      <div class="small"><a href="${esc(t.source_url)}" target="_blank" rel="noreferrer">${esc(t.source_url)}</a></div></td>
+      <td>${esc(t.category)}</td><td><span class="pill ${t.installed?'completed':'skipped'}">${t.installed?'installed':'missing'}</span></td>
+      <td class="mono small">${esc(t.version||'—')}</td><td>${esc(t.method)}</td>
+      <td>${t.invasive?'<span class="pill failed">invasive</span>':''}${t.install_note?`<div class="small muted">${esc(t.install_note)}</div>`:''}</td><td>${actions}</td></tr>`
+  }).join('')
+  $('#main').innerHTML=`<div class="rhead"><div><div class="eyebrow">Administration</div><h1>Tools &amp; emulator manager</h1>
+    <div class="rsub"><span>Official sources only</span><span>${esc(c.platform||'')}</span><span>${esc(c.root||'')}</span></div></div></div>
+    <div class="banner info">${c.enabled?'Enabled':'Disabled — set <code>APKPT_TOOL_MANAGER=1</code> and restart the server to run jobs.'} · For authorized security testing only. Installs change local system state and must not modify third-party systems.</div>
+    ${state.toolMsg?`<div class="banner ${esc(state.toolMsgLevel||'info')}">${esc(state.toolMsg)}</div>`:''}
+    <div class="toolbar"><button class="btn primary" data-bulk="install-all">Install / update all</button>
+      <button class="btn" data-bulk="update-all">Update all</button>
+      <button class="btn" data-bulk="verify">Verify all sources</button>
+      <button class="btn" data-bulk="emulator">Install emulator</button>
+      <button class="btn" id="sync-db">Sync installed DB</button>
+      <button class="btn" data-tool-web="mobsf">Open MobSF</button>
+      <a class="btn" href="/tools/dashboard">Installed software HTML</a>
+      <button class="btn" id="refresh-tools">Refresh</button></div>
+    <div class="mgrid"><div class="mc"><h3>Jobs (${jobs.length})</h3><div id="jobs">${jobsHtml()}</div></div>
+    <div class="mc"><h3>Source policy</h3><p class="muted small">Downloads are restricted to these HTTPS hosts. Redirects to other hosts are rejected.</p>
+      <div class="chips">${(c.source_policy?.allowed_hosts||c.allowed_hosts||[]).map(h=>`<span class="chip">${esc(h)}</span>`).join('')}</div>
+      <h4>Emulator needs</h4><div class="kv"><span>AVD</span><span>${esc((c.emulator||{}).avd||'')}</span></div>
+      <div class="kv"><span>Image</span><span>${esc((c.emulator||{}).system_image||'')}</span></div>
+      <div class="kv"><span>Java</span><span>${esc((c.emulator||{}).needs?.java_runtime||'')}</span></div>
+      <div class="kv"><span>SDK root</span><span class="wrap">${esc(c.android_sdk_root||'')}</span></div>
+      <p class="muted small">${((c.emulator||{}).requirements||[]).join(' · ')} Emulator setup does not launch or modify a device.</p></div></div>
+    <h3 style="margin-top:22px">Installed software database</h3>${installedHtml()}
+    <div class="tool-access">
+      <h3>Tool access <span class="muted small" id="tool-match-count">${tools.length} tools</span></h3>
+      <div class="tool-controls">
+        <input id="tool-search" type="search" placeholder="Find a tool…" value="${esc(state.toolQuery)}" aria-label="Find a tool" autocomplete="off">
+        ${[{id:'all',icon:'▦',title:'All',count:tools.length},...(c.groups||[])].map(g=>`<button class="tool-filter ${state.toolGroup===g.id?'active':''}" data-tool-group="${esc(g.id)}" title="${esc(g.title)}"><span aria-hidden="true">${esc(g.icon||'•')}</span> ${esc(g.title)} <span class="muted">${g.count??''}</span></button>`).join('')}
+      </div>
+      <div class="tool-groups" id="tool-groups">${toolGroupsHtml()}</div>
+      <details class="advanced-table"><summary>Detailed catalog table</summary>
+        <div class="tw"><table><thead><tr><th>Tool</th><th>Category</th><th>Status</th><th>Version</th><th>Method</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>
+      </details>
+    </div>`
+}
+
+async function refreshJobs() {
+  try { state.jobs=await api('/api/tools/jobs'); const el=$('#jobs'); if(el) el.innerHTML=jobsHtml() } catch(e) {}
+  if (state.jobs.some(j=>['queued','running'].includes(j.status))) return
+  if (state.jobTimer) { clearInterval(state.jobTimer); state.jobTimer=null }
+  await loadToolManager(true)
+}
+
+function ensureJobPoller() {
+  if (state.jobTimer) clearInterval(state.jobTimer)
+  state.jobTimer=null
+  if (state.jobs.some(j=>['queued','running'].includes(j.status))) state.jobTimer=setInterval(refreshJobs,1000)
+}
+
+async function startToolJob(path,label) {
+  try {
+    const result=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})})
+    state.toolMsg=`${label}: job ${result.job_id} is ${result.status}. ${result.detail||''}`
+    state.toolMsgLevel=result.level || levelForStatus(result.status,result.job?.action)
+    state.jobs=[result,...state.jobs.filter(j=>j.job_id!==result.job_id)]
+    renderToolManager(); ensureJobPoller()
+    if (result.job_id) { autoTermShow(label,result); autoTermPoll() }
+  } catch(e) { state.toolMsg=e.message; state.toolMsgLevel='critical'; renderToolManager() }
+}
+
+function logLevel(text) {
+  const s=String(text ?? '').toLowerCase()
+  if (!s) return 'dim'
+  const has=(words)=>words.some(word=>s.includes(word))
+  if (has(['critical','fatal','traceback','error:','[error]','exception:'])) return 'critical'
+  if (has(['warning','warn:','already installed','already cloned','skipped','manual required','not found','unavailable','retry','retrying'])) return 'low'
+  if (has(['failed','failure','denied','refused','unauthorized','forbidden','timeout','timed out','502','503','504','high'])) return 'high'
+  if (has(['installed ','updated ','completed','complete','verified','ready at','synced','success','passed','job finished'])) return 'ok'
+  if (/^\[\d+\/\d+\]/.test(s) || has(['install','update','download','pull','clon','running','process','prepar','starting','started','sync','git ','sdkmanager'])) return 'work'
+  if (has(['info','http ','head ','version','source','official','pypi','github','repository','repo','from ','→','$ '])) return 'info'
+  return 'dim'
+}
+
+function logLinesHtml(lines, limit=40) {
+  const arr=(lines||[]).slice(-limit)
+  if (!arr.length) return '<span class="op-line op-dim">No log output.</span>'
+  return arr.map(line=>`<span class="op-line op-${logLevel(line)}">${esc(line)}</span>`).join('')
+}
+
+function levelForStatus(status, action='') {
+  const s=String(status ?? '').toLowerCase(), a=String(action ?? '').toLowerCase()
+  if (['running','processing','installing','updating','pulling'].includes(s)) return s
+  if (s==='queued') return 'queued'
+  if (['completed','done','passed','ok','installed','updated'].includes(s)) return 'ok'
+  if (['failed','error','critical'].includes(s)) return 'critical'
+  if (['skipped','warn','warning','low'].includes(s)) return 'low'
+  if (a.includes('install')) return 'installing'
+  if (a.includes('update')) return 'updating'
+  if (a.includes('pull')) return 'pulling'
+  return s || 'dim'
+}
+
+function autoTermRender() {
+  const t=state.autoTerm, log=$('#at-log')
+  if (!log) return
+  log.innerHTML=t.lines.length
+    ? t.lines.map(item=>`<span class="at-line op-${esc(item.level)}">${esc(item.text)}</span>`).join('')
+    : '<span class="at-line op-dim">Waiting for job output…</span>'
+  log.scrollTop=log.scrollHeight
+}
+
+function autoTermHide() {
+  const t=state.autoTerm
+  if (t.timer) { clearTimeout(t.timer); t.timer=null }
+  if (t.hideTimer) { clearTimeout(t.hideTimer); t.hideTimer=null }
+  t.jobId=null; t.lines=[]; t.label=''; t.status=''; t.finished=false
+  const el=$('#auto-term'); if (el) el.classList.remove('open')
+}
+
+function autoTermShow(label, job) {
+  const t=state.autoTerm
+  if (t.timer) { clearTimeout(t.timer); t.timer=null }
+  if (t.hideTimer) { clearTimeout(t.hideTimer); t.hideTimer=null }
+  t.jobId=job?.job_id||null
+  t.label=label||job?.tool_id||'tool job'
+  t.status=job?.status||'queued'
+  t.lines=[]
+  t.finished=false
+  const title=$('#at-title'), status=$('#at-status')
+  if (title) title.textContent=t.label
+  if (status) status.textContent=t.status
+  autoTermRender()
+  const el=$('#auto-term'); if (el) el.classList.add('open')
+}
+
+function autoTermPoll() {
+  const t=state.autoTerm, jobId=t.jobId
+  if (!jobId) return
+  api(`/api/tools/jobs/${encodeURIComponent(jobId)}`).then(job=>{
+    if (state.autoTerm.jobId!==jobId) return
+    t.status=job.status
+    const status=$('#at-status'); if (status) status.textContent=job.status
+    const logs=job.logs||[]
+    if (logs.length>t.lines.length) {
+      logs.slice(t.lines.length).forEach(line=>t.lines.push({text:String(line),level:'work'}))
+      autoTermRender()
+    }
+    if (['completed','failed','skipped'].includes(job.status)) {
+      if (!t.finished) {
+        t.finished=true
+        const text=`[${job.status}] ${job.detail||''}`.trim()
+        t.lines.push({text,level:levelForStatus(job.status,job.action)})
+        autoTermRender()
+        state.toolMsg=`${t.label}: ${job.status}. ${job.detail||''}`.trim()
+        state.toolMsgLevel=levelForStatus(job.status,job.action)
+        renderToolManager()
+        void loadToolManager(true)
+        t.hideTimer=setTimeout(autoTermHide,3000)
+      }
+      return
+    }
+    t.timer=setTimeout(autoTermPoll,700)
+  }).catch(e=>{
+    if (state.autoTerm.jobId!==jobId) return
+    t.lines.push({text:`poll error: ${e.message}`,level:'critical'})
+    autoTermRender()
+    t.hideTimer=setTimeout(autoTermHide,3000)
+  })
+}
+
+function shellWrite(text, cls='auto') {
+  const sh=state.shell
+  String(text ?? '').split(/\r?\n/).forEach(line=>{
+    let level=cls
+    if (cls==='auto' || !cls) level=logLevel(line)
+    else if (cls==='err') level='critical'
+    else if (cls==='ok') level='ok'
+    else if (cls==='info') level='info'
+    sh.lines.push({line,cls:level})
+  })
+  if (sh.lines.length>300) sh.lines.splice(0, sh.lines.length-300)
+  const log=$('#shell-log')
+  if (log) {
+    log.innerHTML=sh.lines.map(l=>`<div class="shell-line op-line op-${l.cls}">${esc(l.line)||'&nbsp;'}</div>`).join('')
+    log.scrollTop=log.scrollHeight
+  }
+}
+
+function shellSetOpen(open) {
+  state.shell.open=open
+  const panel=$('#shell-panel')
+  if (panel) panel.classList.toggle('open', open)
+  if (open) {
+    const input=$('#shell-input'); if (input) input.focus()
+    shellScheduleHide()
+  } else if (state.shell.hideTimer) {
+    clearTimeout(state.shell.hideTimer); state.shell.hideTimer=null
+  }
+}
+
+function shellScheduleHide() {
+  const sh=state.shell
+  if (sh.hideTimer) { clearTimeout(sh.hideTimer); sh.hideTimer=null }
+  if (!sh.open || sh.pinned || sh.jobId) return
+  sh.hideTimer=setTimeout(()=>shellSetOpen(false), 30000)
+}
+
+async function shellPollJob() {
+  const sh=state.shell, id=sh.jobId
+  if (!id) return
+  if (sh.timer) { clearTimeout(sh.timer); sh.timer=null }
+  try {
+    const job=await api(`/api/tools/jobs/${encodeURIComponent(id)}`)
+    const logs=job.logs||[]
+    for (let i=sh.lastLog;i<logs.length;i++) shellWrite(logs[i])
+    sh.lastLog=logs.length
+    if (['completed','failed','skipped'].includes(job.status)) {
+      shellWrite(`[${job.status}] ${job.detail||''}`.trim(), levelForStatus(job.status))
+      sh.jobId=null; shellScheduleHide(); return
+    }
+  } catch(e) {
+    shellWrite(`job poll error: ${e.message}`, 'err')
+    sh.jobId=null; shellScheduleHide(); return
+  }
+  sh.timer=setTimeout(shellPollJob, 1000)
+}
+
+async function shellRun() {
+  const input=$('#shell-input')
+  const command=(input?.value||'').trim()
+  if (!command) return
+  if (input) input.value=''
+  state.shell.history.push(command); state.shell.historyIndex=state.shell.history.length
+  shellWrite(`$ ${command}`, 'dim')
+  shellScheduleHide()
+  try {
+    const result=await api('/api/tools/shell',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,confirm:true})})
+    if (result.clear) { state.shell.lines=[]; const log=$('#shell-log'); if (log) log.innerHTML='' }
+    if (result.output) shellWrite(result.output, result.level || logLevel(result.output))
+    if (result.job_id) {
+      state.shell.jobId=result.job_id; state.shell.lastLog=0; shellPollJob()
+      autoTermShow(command,result); autoTermPoll()
+    }
+  } catch(e) { shellWrite(`error: ${e.message}`, 'err') }
+  shellScheduleHide()
+}
+
+function shellClear() {
+  state.shell.lines=[]
+  const log=$('#shell-log'); if (log) log.innerHTML=''
+  shellWrite('terminal cleared', 'dim')
+}
+
+function wireShell() {
+  const tab=$('#shell-tab'), panel=$('#shell-panel'), input=$('#shell-input')
+  tab?.addEventListener('click', ()=>shellSetOpen(!state.shell.open))
+  $('#shell-close')?.addEventListener('click', ()=>shellSetOpen(false))
+  $('#shell-clear')?.addEventListener('click', shellClear)
+  $('#shell-run')?.addEventListener('click', shellRun)
+  $('#shell-pin')?.addEventListener('click', () => {
+    state.shell.pinned=!state.shell.pinned
+    const pin=$('#shell-pin'); if (pin) pin.textContent=state.shell.pinned?'unpin':'pin'
+    shellScheduleHide()
+  })
+  input?.addEventListener('input', shellScheduleHide)
+  input?.addEventListener('keydown', e => {
+    const sh=state.shell
+    if (e.key==='Enter') { e.preventDefault(); shellRun() }
+    else if (e.key==='Escape') { e.preventDefault(); shellSetOpen(false) }
+    else if (e.key==='ArrowUp' && sh.history.length) {
+      e.preventDefault(); sh.historyIndex=Math.max(0,sh.historyIndex-1); input.value=sh.history[sh.historyIndex]||''
+    } else if (e.key==='ArrowDown' && sh.history.length) {
+      e.preventDefault(); sh.historyIndex=Math.min(sh.history.length,sh.historyIndex+1); input.value=sh.history[sh.historyIndex]||''
+    }
+    shellScheduleHide()
+  })
+  panel?.addEventListener('mousemove', shellScheduleHide)
+  panel?.addEventListener('click', shellScheduleHide)
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey||e.metaKey) && e.key==='`') { e.preventDefault(); shellSetOpen(!state.shell.open) }
+    if (e.key==='Escape' && $('#auto-term')?.classList.contains('open')) autoTermHide()
+  })
+  shellWrite('shell ready · type help for allowed commands', 'dim')
+}
+
+function wire() {
+  $('#at-close')?.addEventListener('click', autoTermHide)
+  $('#main').addEventListener('click', e => {
+    if (e.target.closest('#refresh-tools')) { loadToolManager(); return }
+    const bulk=e.target.closest('[data-bulk]'); if (bulk) {
+      const k=bulk.dataset.bulk
+      const path=k==='emulator'?'/api/tools/emulator/install':k==='verify'?'/api/tools/all/verify_all':`/api/tools/${k}`
+      startToolJob(path,k.replace(/-/g,' ')); return
+    }
+    const groupBtn=e.target.closest('[data-tool-group]'); if (groupBtn) {
+      state.toolGroup=groupBtn.dataset.toolGroup
+      document.querySelectorAll('.tool-filter').forEach(b=>b.classList.toggle('active',b.dataset.toolGroup===state.toolGroup))
+      renderToolGroups(); return
+    }
+    const web=e.target.closest('[data-tool-web]'); if (web) { openToolWeb(web.dataset.toolWeb); return }
+    if (e.target.closest('#sync-db')) { syncInstalledDb(); return }
+    const why=e.target.closest('[data-tool-why]'); if (why) {
+      state.toolMsg=why.dataset.reason||'Manual installation required.'
+      state.toolMsgLevel='info'; renderToolManager(); return
+    }
+    const ta=e.target.closest('[data-tool-action]'); if (ta) {
+      startToolJob(`/api/tools/${encodeURIComponent(ta.dataset.tool)}/${ta.dataset.toolAction}`,`${ta.dataset.tool} ${ta.dataset.toolAction}`); return
+    }
+    const pa=e.target.closest('[data-pki-action]'); if (pa) { runPkiAction(pa.dataset.pkiAction); return }
+    const d=e.target.closest('[data-diff]'); if (d) { const sel=$('#diffagainst'); if(sel) loadDiff(d.dataset.diff, sel.value); return }
+    const mb=e.target.closest('[data-open-mobsf]'); if (mb) { openMobsf(mb.dataset.openMobsf); return }
+    const t=e.target.closest('[data-tab]'); if (t) { state.tab=t.dataset.tab; renderMain(); return }
+    const f=e.target.closest('[data-f]'); if (f) { state.filter=f.dataset.f; renderMain(); return }
+    const o=e.target.closest('[data-open]'); if (o) { const b=o.nextElementSibling; b.style.display=b.style.display==='none'?'block':'none'; o.querySelector('span:last-child').textContent=b.style.display==='none'?'▸':'▾' }
+  })
+  $('#main').addEventListener('input', e => {
+    if (e.target.id==='q') { state.query=e.target.value; const p=e.target.selectionStart; renderMain(); const n=$('#q'); if(n){n.focus(); n.setSelectionRange(p,p)} }
+    if (e.target.id==='tool-search') { state.toolQuery=e.target.value; renderToolGroups() }
+  })
+  $('#file').addEventListener('change', e => { const f=e.target.files[0]; if(f){ $('#sel').style.display='flex'; $('#selname').textContent=f.name; $('#selname').dataset.name=f.name; window.__apkFile=f } })
+  $('#submit').addEventListener('click', async () => {
+    if(!window.__apkFile) return
+    const fd=new FormData(); fd.append('file', window.__apkFile)
+    $('#submit').disabled=true
+    try { const res=await api('/api/scans',{method:'POST',body:fd}); $('#sel').style.display='none'; window.__apkFile=null; await loadScans(); select(res.scan_id) }
+    catch(e){ alert(e.message) } finally { $('#submit').disabled=false }
+  })
+  const drop=$('#drop')
+  drop.addEventListener('dragover', e=>{e.preventDefault();drop.classList.add('drag')})
+  drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'))
+  drop.addEventListener('drop', e=>{e.preventDefault();drop.classList.remove('drag');const f=e.dataTransfer.files[0];if(f){window.__apkFile=f;$('#sel').style.display='flex';$('#selname').textContent=f.name}})
+  $('#refresh').addEventListener('click', loadScans)
+  $('#open-manager').addEventListener('click', () => { state.view='tools'; state.active=null; if(state.timer){clearInterval(state.timer);state.timer=null}; renderMain(); loadToolManager() })
+}
+
+async function init() {
+  wire(); wireShell(); renderMain()
+  try {
+    state.health = await api('/api/health')
+    $('#engines').innerHTML = ['sast','sca','dast','sca_online','advanced','pki','live_checks','medical','toolchain','tool_manager','auth'].map(k=>{
+      const on=state.health.engines[k]
+      const label=k==='sca_online'?'OSV lookup':k==='live_checks'?'Live checks':k==='toolchain'?'Toolchain':k==='tool_manager'?'Tool manager':k.toUpperCase()
+      return `<div class="er"><span class="dot ${on?'on':''}"></span><span>${label}</span><span class="v">${on?'on':'off'}</span></div>`
+    }).join('') + `<div class="tools">${state.health.tools.map(t=>`<span class="tool ${t.available?'on':''}" title="${esc(t.name)}">${esc(t.name)}</span>`).join('')}</div>`
+      + `<div class="tools">${(state.health.toolchain||[]).map(t=>`<span class="tool ${t.available?'on':''}" title="${esc(t.detail||'')}">${esc(t.name)}</span>`).join('')}</div>`
+  } catch(e) { $('#engines').innerHTML='<div class="muted">API unreachable</div>' }
+  await loadScans()
+}
+init()
+</script>
+</body>
+</html>

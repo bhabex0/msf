@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+backend/storage/
+frontend/dist/
+frontend/node_modules/
+node_modules/
+sample-vulnerable.apk
+.DS_Store
