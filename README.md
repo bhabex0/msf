@@ -41,7 +41,7 @@ The platform keeps port `8000`; each optional web UI has its own recommended loc
 |---|---:|---|
 | Platform dashboard | `8000` | `python run.py --port 8000` / `APKPT_PLATFORM_PORT` |
 | MobSF static | `8001` | `APKPT_MOBSF_PORT=8001` or `APKPT_MOBSF_URL=...` |
-| MobSF dynamic | `8002` | `APKPT_MOBSF_DYNAMIC_PORT=8002` or `APKPT_MOBSF_DYNAMIC_URL=...` |
+| MobSF dynamic | `8002` (optional second instance) | `APKPT_MOBSF_DYNAMIC_PORT=8002` or `APKPT_MOBSF_DYNAMIC_URL=...`; otherwise follows MobSF static on `8001` |
 | APKHunt | `8003` | `APKPT_APKHUNT_PORT=8003` or `APKPT_APKHUNT_URL=...` |
 | RMS | `8004` | `APKPT_RMS_PORT=8004` or `APKPT_RMS_URL=...` |
 | ZAP web UI | `8005` | `APKPT_ZAP_WEB_PORT=8005` or `APKPT_ZAP_WEB_URL=...` |
@@ -52,7 +52,7 @@ Setting a `*_PORT` variable constructs `http://127.0.0.1:<port>` for that tool; 
 python run.py --port 8000 --auto-web-ports
 ```
 
-or set `APKPT_TOOL_WEB_AUTO=1`. This is opt-in and only triggers when the platform port matches `APKPT_TOOL_WEB_AUTO_TRIGGER_PORT` (default `8000`); a different platform port leaves tool URLs unconfigured unless you set them individually. Web UI launching remains gated. The **Tools → Web UI ports** panel shows the effective values and an `auto` badge when activation is active.
+or set `APKPT_TOOL_WEB_AUTO=1`. This is opt-in and only triggers when the platform port matches `APKPT_TOOL_WEB_AUTO_TRIGGER_PORT` (default `8000`). It configures MobSF static (`8001`), APKHunt (`8003`), RMS (`8004`) and ZAP (`8005`); MobSF dynamic follows the static URL on `8001` unless you explicitly set `APKPT_MOBSF_DYNAMIC_PORT=8002`. Starting with `--auto-web-ports` does **not** start the external tools. Web UI launching remains gated. The **Tools → Web UI ports** panel shows the effective values and an `auto` badge when activation is active.
 
 When a URL is configured, tool cards show an **Open URL** link that opens MobSF, RMS, ZAP, APKHunt, etc. directly in a new browser tab. This direct link is a normal browser link and does not need the server-side browser-open gate; the separate **Web UI** button still uses the gated server-side launch for Chromium/system-browser workflows.
 

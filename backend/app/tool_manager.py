@@ -672,8 +672,9 @@ def web_ports_status() -> dict[str, Any]:
         },
         "note": (
             "Set an APKPT_*_PORT variable to build a local URL on a dedicated port, or enable "
-            "APKPT_TOOL_WEB_AUTO=1 with the platform on the trigger port to activate them all. "
-            "A full APKPT_*_URL variable always wins. Web UI launching stays gated."
+            "APKPT_TOOL_WEB_AUTO=1 with the platform on the trigger port to activate the main tool ports. "
+            "MobSF dynamic follows the static MobSF URL unless APKPT_MOBSF_DYNAMIC_PORT/URL is set explicitly. "
+            "URLs do not start services. Web UI launching stays gated."
         ),
     }
 

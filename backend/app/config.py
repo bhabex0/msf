@@ -92,19 +92,19 @@ TOOL_WEB_AUTO_TRIGGER_PORT = _tool_port("APKPT_TOOL_WEB_AUTO_TRIGGER_PORT", 8000
 TOOL_WEB_AUTO_ACTIVE = TOOL_WEB_AUTO and TOOL_WEB_PORTS["platform"] == TOOL_WEB_AUTO_TRIGGER_PORT
 
 
-def _configured_web_url(url_env: str, port_env: str, port_key: str) -> str:
+def _configured_web_url(url_env: str, port_env: str, port_key: str, allow_auto: bool = True) -> str:
     """Use an explicit URL, else build one when its port or auto mode is enabled."""
     explicit = os.getenv(url_env, "").strip().rstrip("/")
     if explicit:
         return explicit
-    if os.getenv(port_env, "").strip() or TOOL_WEB_AUTO_ACTIVE:
+    if os.getenv(port_env, "").strip() or (allow_auto and TOOL_WEB_AUTO_ACTIVE):
         return f"http://{TOOL_WEB_HOST}:{TOOL_WEB_PORTS[port_key]}"
     return ""
 
 
-def _configured_web_port(port_env: str, port_key: str) -> int | None:
+def _configured_web_port(port_env: str, port_key: str, allow_auto: bool = True) -> int | None:
     """Return the active port only when the operator opted into it."""
-    if os.getenv(port_env, "").strip() or TOOL_WEB_AUTO_ACTIVE:
+    if os.getenv(port_env, "").strip() or (allow_auto and TOOL_WEB_AUTO_ACTIVE):
         return TOOL_WEB_PORTS[port_key]
     return None
 
@@ -264,12 +264,20 @@ BLUETOOTHCTL_CMD = os.getenv("APKPT_BLUETOOTHCTL_CMD", "bluetoothctl")
 HCITOOL_CMD = os.getenv("APKPT_HCITOOL_CMD", "hcitool")
 NRFUTIL_CMD = os.getenv("APKPT_NRFUTIL_CMD", "nrfutil")
 
+# Dynamic analysis runs inside the same MobSF web application by default. A
+# dedicated 8002 instance is optional and must be configured explicitly; auto
+# mode must not create a dead URL when only one MobSF service is running.
 MOBSF_DYNAMIC_URL = (
-    os.getenv("APKPT_MOBSF_DYNAMIC_URL", "").strip().rstrip("/")
-    or _configured_web_url("APKPT_MOBSF_DYNAMIC_URL", "APKPT_MOBSF_DYNAMIC_PORT", "mobsf_dynamic")
+    _configured_web_url(
+        "APKPT_MOBSF_DYNAMIC_URL", "APKPT_MOBSF_DYNAMIC_PORT",
+        "mobsf_dynamic", allow_auto=False,
+    )
     or MOBSF_URL
 )
-MOBSF_DYNAMIC_PORT = _configured_web_port("APKPT_MOBSF_DYNAMIC_PORT", "mobsf_dynamic") or MOBSF_PORT
+MOBSF_DYNAMIC_PORT = (
+    _configured_web_port("APKPT_MOBSF_DYNAMIC_PORT", "mobsf_dynamic", allow_auto=False)
+    or MOBSF_PORT
+)
 # Explicit endpoint action only: open an authorised MobSF UI in Chromium.
 BROWSER_OPEN_ENABLED = os.getenv("APKPT_BROWSER_OPEN", "0") == "1"
 

@@ -176,7 +176,7 @@ Run the platform on `8000` and give each optional web UI its own local port:
 |---|---:|---|---|
 | Platform | `8000` | `APKPT_PLATFORM_PORT` (reported only; use `run.py --port`) | — |
 | MobSF static | `8001` | `APKPT_MOBSF_PORT` | `APKPT_MOBSF_URL` |
-| MobSF dynamic | `8002` | `APKPT_MOBSF_DYNAMIC_PORT` | `APKPT_MOBSF_DYNAMIC_URL` |
+| MobSF dynamic | `8002` (optional second instance) | `APKPT_MOBSF_DYNAMIC_PORT` | `APKPT_MOBSF_DYNAMIC_URL` |
 | APKHunt | `8003` | `APKPT_APKHUNT_PORT` | `APKPT_APKHUNT_URL` |
 | RMS | `8004` | `APKPT_RMS_PORT` | `APKPT_RMS_URL` |
 | ZAP web UI | `8005` | `APKPT_ZAP_WEB_PORT` | `APKPT_ZAP_WEB_URL` |
@@ -190,7 +190,7 @@ python run.py --port 8000 --auto-web-ports
 # or set APKPT_TOOL_WEB_AUTO=1
 ```
 
-The auto mode triggers only when the platform port matches `APKPT_TOOL_WEB_AUTO_TRIGGER_PORT` (default `8000`). On any other port, set the individual `*_PORT` or `*_URL` variables you need. The **Web UI ports** panel in the tool manager shows the recommended values, currently configured URLs, and an `auto` badge when activation is active.
+The auto mode triggers only when the platform port matches `APKPT_TOOL_WEB_AUTO_TRIGGER_PORT` (default `8000`). It activates MobSF static (`8001`), APKHunt (`8003`), RMS (`8004`) and ZAP (`8005`). MobSF dynamic follows the static MobSF URL on `8001` unless you explicitly set `APKPT_MOBSF_DYNAMIC_PORT=8002` for a second instance. On any other platform port, set the individual `*_PORT` or `*_URL` variables you need. Starting with auto mode does **not** start MobSF/RMS/ZAP; it only configures dashboard links. The **Web UI ports** panel in the tool manager shows the recommended values, currently configured URLs, and an `auto` badge when activation is active.
 
 When a web URL is configured, each tool card also shows **Open URL**, a direct browser link to that tool (MobSF, RMS, ZAP, APKHunt, etc.). This link opens in a new tab and does not require the server-side browser-open gate. The separate **Web UI** button remains the gated server-side launch described in section 2.2.
 
@@ -295,6 +295,8 @@ Then point the platform at the dedicated ports:
 $env:APKPT_MOBSF_PORT='8001'
 $env:APKPT_MOBSF_DYNAMIC_PORT='8002'
 ```
+
+If you only run one MobSF container (recommended when Docker is unavailable), omit `APKPT_MOBSF_DYNAMIC_PORT`; dynamic analysis uses the same instance on `8001`. This host currently has no Docker daemon or WSL distribution, and MobSF's Windows pip install fails on the `lief` wheel, so only the shared-instance setup can be used here until Docker/WSL is installed.
 
 MobSF supports rooted Android VMs up to API 30 and, from v4.6.0, Frida Gadget mode for non-rooted/newer Android 5.0+ targets. For Docker with a host ADB server, restrict port `5037` to the Docker host.
 

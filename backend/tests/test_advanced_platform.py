@@ -615,7 +615,6 @@ class AdvancedFeatureTests(unittest.TestCase):
         with patch.object(config, "TOOL_WEB_AUTO_ACTIVE", True):
             for tool_key, url_env, port_env, expected_port in (
                 ("mobsf", "APKPT_MOBSF_URL", "APKPT_MOBSF_PORT", 8001),
-                ("mobsf_dynamic", "APKPT_MOBSF_DYNAMIC_URL", "APKPT_MOBSF_DYNAMIC_PORT", 8002),
                 ("apkhunt", "APKPT_APKHUNT_URL", "APKPT_APKHUNT_PORT", 8003),
                 ("rms", "APKPT_RMS_URL", "APKPT_RMS_PORT", 8004),
                 ("zaproxy", "APKPT_ZAP_WEB_URL", "APKPT_ZAP_WEB_PORT", 8005),
@@ -628,6 +627,25 @@ class AdvancedFeatureTests(unittest.TestCase):
                         f"http://127.0.0.1:{expected_port}",
                     )
                     self.assertEqual(config._configured_web_port(port_env, tool_key), expected_port)
+
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("APKPT_MOBSF_DYNAMIC_URL", None)
+                os.environ.pop("APKPT_MOBSF_DYNAMIC_PORT", None)
+                self.assertEqual(
+                    config._configured_web_url(
+                        "APKPT_MOBSF_DYNAMIC_URL", "APKPT_MOBSF_DYNAMIC_PORT",
+                        "mobsf_dynamic", allow_auto=False,
+                    ),
+                    "",
+                )
+                os.environ["APKPT_MOBSF_DYNAMIC_PORT"] = "8002"
+                self.assertEqual(
+                    config._configured_web_url(
+                        "APKPT_MOBSF_DYNAMIC_URL", "APKPT_MOBSF_DYNAMIC_PORT",
+                        "mobsf_dynamic", allow_auto=False,
+                    ),
+                    "http://127.0.0.1:8002",
+                )
 
         status = tool_manager.web_ports_status()
         self.assertEqual(status["recommended"]["platform"], 8000)
