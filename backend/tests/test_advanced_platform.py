@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -590,6 +591,34 @@ class AdvancedFeatureTests(unittest.TestCase):
             data["emulator"]["needs"]["java_runtime"],
             r"Installed: C:\java\bin\java.exe",
         )
+
+    def test_tool_subprocess_exports_detected_java(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "jdk-21" / "bin"
+            bin_dir.mkdir(parents=True)
+            java_exe = bin_dir / ("java.exe" if os.name == "nt" else "java")
+            java_exe.write_text("", encoding="utf-8")
+            path_key = "Path" if os.name == "nt" else "PATH"
+            with patch.dict(os.environ, {
+                "APKPT_JAVA_CMD": str(java_exe),
+                "JAVA_HOME": "",
+                path_key: str(Path(tmp) / "other"),
+            }):
+                env = tool_manager._subprocess_environment()
+
+        self.assertEqual(env["JAVA_HOME"], str(bin_dir.parent))
+        path_value = env.get(path_key) or env.get("PATH") or ""
+        self.assertTrue(path_value.startswith(str(bin_dir) + os.pathsep))
+        self.assertIn(str(Path(tmp) / "other"), path_value)
+
+    def test_tool_run_uses_exported_environment(self):
+        exported = {"APKPT_TEST_ENV": "1"}
+        child = SimpleNamespace(returncode=0, stdout="ok")
+        with patch.object(tool_manager, "_subprocess_environment", return_value=exported), \
+                patch.object(tool_manager.subprocess, "run", return_value=child) as run:
+            code, output = tool_manager._run(["tool"], lambda _message: None)
+        self.assertEqual((code, output), (0, "ok"))
+        self.assertEqual(run.call_args.kwargs["env"], exported)
 
     def test_react_ui_has_cyber_glass_assets(self):
         styles = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")

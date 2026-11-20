@@ -168,6 +168,8 @@ Open **Tools & emulator manager** in the sidebar or visit `/tools/dashboard`. To
 
 Installed tools do **not** show a redundant **Install** button. Missing installable tools show **Install**. Manual/unsupported tools show **Why** with the exact explanation. The toolbar's **Install DAST tools** action installs the host-side DAST/SAST CLI subset (`drozer`, `androguard`, `apkid`, `qark`) after `APKPT_TOOL_MANAGER=1`; it is also part of the gated emulator setup job.
 
+The gated emulator setup passes the detected JDK to every tool subprocess as `JAVA_HOME` and prepends its `bin` directory to `PATH`. This prevents `sdkmanager.bat` / `avdmanager.bat` from failing with “JAVA_HOME is not set” when the platform server was launched without Java on its inherited PATH. `APKPT_JAVA_CMD` overrides detection.
+
 ### 3.1 Web UI port map
 
 Run the platform on `8000` and give each optional web UI its own local port:

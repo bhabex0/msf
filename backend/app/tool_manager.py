@@ -1480,6 +1480,7 @@ def _run(
             cmd, cwd=str(cwd) if cwd else None, input=input_text,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
             timeout=float(config.TOOL_MANAGER_TIMEOUT), shell=False,
+            env=_subprocess_environment(),
         )
     except FileNotFoundError as exc:
         if check:
@@ -1976,6 +1977,51 @@ def _java_executable() -> str:
         if candidate.is_file():
             return str(candidate)
     return ""
+
+
+def _subprocess_environment() -> dict[str, str]:
+    """Export the detected JDK to gated tool subprocesses.
+
+    Android's ``sdkmanager.bat`` and ``avdmanager.bat`` require ``JAVA_HOME``
+    (or ``java.exe`` on PATH). The server may discover Java outside its own
+    inherited PATH, so each child process gets both values explicitly.
+    """
+    env = os.environ.copy()
+    java = _java_executable()
+    if not java:
+        return env
+
+    java_path = Path(java)
+    if not java_path.is_absolute():
+        resolved = shutil.which(java) or shutil.which(java_path.name)
+        if resolved:
+            java_path = Path(resolved)
+
+    if java_path.name.lower() in ("java", "java.exe"):
+        bin_dir = java_path.parent
+    elif java_path.parent.name.lower() == "bin":
+        bin_dir = java_path.parent
+    else:
+        return env
+    if not str(bin_dir) or str(bin_dir) == ".":
+        return env
+
+    env["JAVA_HOME"] = str(bin_dir.parent)
+
+    # Windows hosts can expose both PATH and Path. Collapse them so the child
+    # receives one unambiguous PATH entry with the Java bin directory first.
+    path_key = "Path" if os.name == "nt" else "PATH"
+    existing_path = ""
+    for key in list(env):
+        if key.upper() == "PATH":
+            existing_path = env.pop(key) or existing_path
+    entries = [entry for entry in existing_path.split(os.pathsep) if entry]
+    bin_text = str(bin_dir)
+    normalized = bin_text.rstrip("\\/").lower()
+    if not any(entry.rstrip("\\/").lower() == normalized for entry in entries):
+        entries.insert(0, bin_text)
+    env[path_key] = os.pathsep.join(entries)
+    return env
 
 
 def catalog() -> dict[str, Any]:

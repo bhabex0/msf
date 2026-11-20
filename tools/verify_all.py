@@ -526,6 +526,16 @@ def main() -> int:
     require(all(token in react_shell for token in ("pointerdown", "shellRootRef", "click outside hides"))
             and "seq-step" in react_sequence,
             "React shell auto-hide or sequence rail is missing", failures)
+    java_exe = tool_manager._java_executable()
+    if java_exe:
+        java_env = tool_manager._subprocess_environment()
+        java_bin = str(Path(java_exe).parent)
+        path_key = "Path" if os.name == "nt" else "PATH"
+        require(
+            java_env.get("JAVA_HOME") == str(Path(java_bin).parent)
+            and java_bin in (java_env.get(path_key) or java_env.get("PATH") or ""),
+            "detected Java was not exported to SDK subprocesses", failures,
+        )
     with tempfile.TemporaryDirectory(prefix="apkpt-verify-") as tmp:
         work = Path(tmp)
         for i in range(1, args.iterations + 1):
