@@ -200,6 +200,30 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         install_note="Install through the OS package manager or official OpenSSL distribution; use lab-only CA material.",
     ),
     ToolSpec(
+        id="bluetoothctl", name="bluetoothctl (BlueZ)", category="device", method="manual", manual=True,
+        description="Official BlueZ utility for local Bluetooth adapter inspection.",
+        source_url="https://www.bluez.org/",
+        homepage="https://www.bluez.org/",
+        command="bluetoothctl",
+        install_note="Install BlueZ through your OS package manager. Read-only inspection only; no scanning, pairing or radio changes.",
+    ),
+    ToolSpec(
+        id="hcitool", name="hcitool (BlueZ)", category="device", method="manual", manual=True,
+        description="Official BlueZ HCI utility for local adapter information.",
+        source_url="https://www.bluez.org/",
+        homepage="https://www.bluez.org/",
+        command="hcitool",
+        install_note="Deprecated on newer BlueZ releases; use only on authorized lab hardware.",
+    ),
+    ToolSpec(
+        id="nrfutil", name="nRF Util", category="device", method="manual", manual=True,
+        description="Nordic Semiconductor CLI for BLE development tooling.",
+        source_url="https://www.nordicsemi.com/Products/Development-tools/nRF-Util",
+        homepage="https://www.nordicsemi.com/",
+        command="nrfutil",
+        install_note="Install from the official Nordic Semiconductor distribution; use only with authorized lab hardware.",
+    ),
+    ToolSpec(
         id="zaproxy", name="OWASP ZAP", category="proxy", method="manual", manual=True,
         description="Intercepting proxy and web scanner.",
         source_url="https://zaproxy.org/download/",
@@ -280,6 +304,7 @@ TOOL_ICONS = {
     "frida-tools": "⚡", "objection": "🪝", "rms": "🕹️", "patch-apk": "🩹",
     "trashdroid": "🤖", "mitmproxy": "🕵️", "zaproxy": "🦎", "burp": "🐝",
     "chromium": "🌐", "apatch": "🔓", "keytool": "🗝️", "openssl": "🧾",
+    "bluetoothctl": "📡", "hcitool": "📶", "nrfutil": "🔵",
 }
 
 def tool_group(spec: ToolSpec) -> dict[str, Any]:

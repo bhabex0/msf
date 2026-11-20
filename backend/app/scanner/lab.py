@@ -91,8 +91,25 @@ def _render(template: str, **values: Any) -> str:
     return out
 
 
+def adb_command() -> list[str]:
+    """Resolve adb, falling back to the SDK installed by the gated setup job.
+
+    The configured ``APKPT_ADB_CMD`` (default ``adb``) always wins when it is
+    available. Otherwise the platform-tools binary under ``ANDROID_SDK_ROOT``
+    is used, so a freshly installed SDK works without editing PATH.
+    """
+    parts = split_command(config.ADB_CMD) or ["adb"]
+    if shutil.which(parts[0]) or Path(parts[0]).exists():
+        return parts
+    suffix = ".exe" if os.name == "nt" else ""
+    sdk_adb = Path(config.ANDROID_SDK_ROOT) / "platform-tools" / f"adb{suffix}"
+    if sdk_adb.exists():
+        return [str(sdk_adb)]
+    return parts
+
+
 def _adb_base(serial: str | None = None) -> list[str]:
-    cmd = split_command(config.ADB_CMD) or ["adb"]
+    cmd = adb_command()
     if serial or config.DAST_DEVICE_SERIAL:
         cmd += ["-s", serial or config.DAST_DEVICE_SERIAL]
     return cmd
@@ -149,8 +166,32 @@ def proxy_config() -> dict[str, Any]:
     }
 
 
+def _emulator_paths() -> dict[str, Any]:
+    """Read-only paths used by the local emulator setup, never executed here."""
+    suffix = ".exe" if os.name == "nt" else ""
+    sdk = Path(config.ANDROID_SDK_ROOT)
+    avd = config.EMULATOR_AVD or "apkpt_test_avd"
+    avd_ini = Path.home() / ".android" / "avd" / f"{avd}.ini"
+    sdkmanager = sdk / "cmdline-tools" / "latest" / "bin" / f"sdkmanager{'.bat' if os.name == 'nt' else ''}"
+    emulator = sdk / "emulator" / f"emulator{suffix}"
+    platform_adb = sdk / "platform-tools" / f"adb{suffix}"
+    return {
+        "sdk_root": str(sdk),
+        "avd": avd,
+        "avd_ini": str(avd_ini),
+        "avd_created": avd_ini.exists(),
+        "sdkmanager": str(sdkmanager),
+        "sdkmanager_available": sdkmanager.exists(),
+        "emulator_binary": str(emulator),
+        "emulator_binary_available": emulator.exists(),
+        "platform_tools_adb": str(platform_adb),
+        "platform_tools_adb_available": platform_adb.exists(),
+        "system_image": config.EMULATOR_SYSTEM_IMAGE or None,
+    }
+
+
 def emulator_status() -> dict[str, Any]:
-    adb_parts = split_command(config.ADB_CMD) or ["adb"]
+    adb_parts = adb_command()
     adb_available = bool(shutil.which(adb_parts[0]) or Path(adb_parts[0]).exists())
     devices: list[str] = []
     if adb_available:
@@ -160,12 +201,29 @@ def emulator_status() -> dict[str, Any]:
                 parts = line.split()
                 if len(parts) >= 2 and parts[1] == "device":
                     devices.append(parts[0])
-    return {
+    emulator_devices = [d for d in devices if d.startswith("emulator-")]
+    physical_devices = [d for d in devices if not d.startswith("emulator-")]
+    configured_serial = config.DAST_DEVICE_SERIAL or ""
+    if configured_serial:
+        dast_serial = configured_serial
+    elif config.DAST_PREFER_EMULATOR and emulator_devices:
+        dast_serial = emulator_devices[0]
+    else:
+        dast_serial = devices[0] if devices else ""
+    paths = _emulator_paths()
+    emulator_cmd = config.EMULATOR_CMD or (
+        paths["emulator_binary"] if paths["emulator_binary_available"] else ""
+    )
+    result = {
         "authorization": AUTHORIZATION_NOTICE,
         "adb_available": adb_available,
+        "adb_command": " ".join(adb_parts) if adb_available else None,
         "devices": devices,
-        "emulator_available": _available(config.EMULATOR_CMD),
-        "emulator_command": config.EMULATOR_CMD or None,
+        "emulator_devices": emulator_devices,
+        "physical_devices": physical_devices,
+        "dast_serial": dast_serial or None,
+        "emulator_available": _available(emulator_cmd),
+        "emulator_command": emulator_cmd or None,
         "avd": config.EMULATOR_AVD or None,
         "emulator_auto": config.EMULATOR_AUTO,
         "invasive_allowed": config.ALLOW_INVASIVE,
@@ -175,6 +233,107 @@ def emulator_status() -> dict[str, Any]:
         "mobsf_dynamic_url": config.MOBSF_DYNAMIC_URL or None,
         "chromium_configured": bool(config.CHROMIUM_CMD),
         "browser_open_enabled": config.BROWSER_OPEN_ENABLED,
+        "paths": paths,
+        "launch_gated": not config.EMULATOR_AUTO,
+        "launch_requires": (
+            "APKPT_EMULATOR_AUTO=1 plus an explicit authenticated /api/lab/emulator/launch action"
+        ),
+        "dast_plan": build_emulator_dast_plan(),
+    }
+    result["ready_for_dast"] = bool(adb_available and dast_serial)
+    return result
+
+
+def build_emulator_dast_plan() -> list[dict[str, Any]]:
+    """Return non-executing steps for emulator-backed DAST on an owned test AVD."""
+    paths = _emulator_paths()
+    return [
+        {
+            "name": "create_avd",
+            "status": "planned" if paths["avd_created"] else "needs_setup",
+            "command": "POST /api/tools/emulator/install with confirm=true",
+            "detail": (
+                f"AVD '{paths['avd']}' "
+                + ("is present." if paths["avd_created"] else "is not present; use the gated setup job.")
+            ),
+        },
+        {
+            "name": "launch_avd",
+            "status": "gated" if not config.EMULATOR_AUTO else "allowed",
+            "command": f"{paths['emulator_binary']} -avd {paths['avd']}",
+            "detail": "Only launch from /api/lab/emulator/launch with APKPT_EMULATOR_AUTO=1 and confirm=true.",
+        },
+        {
+            "name": "verify_adb",
+            "status": "planned",
+            "command": f"{' '.join(adb_command())} devices",
+            "detail": "Confirm the emulator serial appears as 'device' before scanning.",
+        },
+        {
+            "name": "run_dast",
+            "status": "planned",
+            "command": "POST /api/scans (DAST runs automatically when a device is attached)",
+            "detail": (
+                f"Target serial: {config.DAST_DEVICE_SERIAL or 'auto-selected emulator'}. "
+                "Use APKPT_DAST_PROXY for interception and keep invasive gates off."
+            ),
+        },
+        {
+            "name": "teardown",
+            "status": "planned",
+            "command": "POST /api/lab/emulator/stop with confirm=true",
+            "detail": "Stop the local AVD after testing; no device data is modified by the platform.",
+        },
+    ]
+
+
+def launch_emulator(confirm: bool = False) -> dict[str, Any]:
+    """Launch the local AVD. Requires the explicit emulator gate plus confirm."""
+    if not confirm:
+        return {"status": "skipped", "detail": "emulator launch was not confirmed", "performed": False}
+    if not config.EMULATOR_AUTO:
+        return {
+            "status": "skipped", "performed": False,
+            "detail": "emulator launch requires APKPT_EMULATOR_AUTO=1",
+        }
+    paths = _emulator_paths()
+    binary = config.EMULATOR_CMD or paths["emulator_binary"]
+    if not _available(binary):
+        return {"status": "skipped", "performed": False, "detail": "emulator binary not found"}
+    cmd = split_command(binary) + ["-avd", paths["avd"]]
+    try:
+        subprocess.Popen(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0) if os.name == "nt" else 0,
+        )
+    except Exception as exc:
+        return {"status": "error", "performed": False, "detail": str(exc)}
+    return {"status": "started", "performed": True, "avd": paths["avd"], "command": " ".join(cmd)}
+
+
+def stop_emulator(confirm: bool = False) -> dict[str, Any]:
+    """Stop the local AVD. Requires the explicit emulator gate plus confirm."""
+    if not confirm:
+        return {"status": "skipped", "detail": "emulator stop was not confirmed", "performed": False}
+    if not config.EMULATOR_AUTO:
+        return {
+            "status": "skipped", "performed": False,
+            "detail": "emulator stop requires APKPT_EMULATOR_AUTO=1",
+        }
+    status = emulator_status()
+    serial = next(
+        (d for d in status["emulator_devices"] if d == config.DAST_DEVICE_SERIAL),
+        None,
+    ) or (status["emulator_devices"][0] if status["emulator_devices"] else None)
+    if not serial:
+        return {"status": "skipped", "performed": False, "detail": "no running emulator device"}
+    code, out = _run(_adb_base(serial) + ["emu", "kill"], timeout=30)
+    return {
+        "status": "stopped" if code == 0 else "error",
+        "performed": code == 0,
+        "serial": serial,
+        "detail": out[:400],
     }
 
 

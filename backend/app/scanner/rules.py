@@ -104,13 +104,32 @@ PKI_BENIGN_EXACT = {
 }
 PKI_FINGERPRINT_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", re.I)
 
+# --- Bluetooth tooling is benign evidence, not malware/threat indicators ----
+BLUETOOTH_BENIGN_EXACT = {
+    "bluetooth", "bluetoothctl", "bluetoothctl.exe", "hcitool", "gatttool",
+    "nrfutil", "nrf connect", "ble", "ble device", "rfcomm", "gatt",
+    "bluetoothgatt", "bluetoothlescanner", "bluetoothsocket", "createbond",
+}
+BT_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
+)
 
-def is_benign_pki_string(value: str) -> bool:
-    """True for exact PKI tool/certificate artifact strings that are not threats."""
+
+def is_benign_passive_string(value: str) -> bool:
+    """True for exact PKI/Bluetooth artifact strings that are not threats."""
     if not isinstance(value, str):
         return False
     normalized = value.strip().lower()
-    return normalized in PKI_BENIGN_EXACT or bool(PKI_FINGERPRINT_RE.match(normalized))
+    return (
+        normalized in PKI_BENIGN_EXACT
+        or normalized in BLUETOOTH_BENIGN_EXACT
+        or bool(PKI_FINGERPRINT_RE.match(normalized))
+        or bool(BT_UUID_RE.match(normalized))
+    )
+
+
+# Backwards-compatible name used by SAST/heuristics and tests.
+is_benign_pki_string = is_benign_passive_string
 
 
 def finding(

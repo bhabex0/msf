@@ -201,6 +201,29 @@ def _pki_section(pki: dict[str, Any], cert: dict[str, Any]) -> str:
     </div>"""
 
 
+def _bluetooth_section(bluetooth: dict[str, Any]) -> str:
+    summary = bluetooth.get("summary") or {}
+    lab = bluetooth.get("lab") or {}
+    if not bluetooth or not (summary or lab):
+        return ""
+    tools = lab.get("tools") or {}
+    rows = [
+        ["Permissions", ", ".join(summary.get("permissions") or []) or "none observed"],
+        ["BLE APIs", ", ".join(summary.get("ble_tokens") or []) or "none observed"],
+        ["Classic APIs", ", ".join(summary.get("classic_tokens") or []) or "none observed"],
+        ["Pairing APIs", ", ".join(summary.get("pairing_tokens") or []) or "none observed"],
+        ["UUID-like values", ", ".join(summary.get("uuids") or []) or "none observed"],
+        ["Local tools", ", ".join(f"{k}={'yes' if v else 'no'}" for k, v in sorted(tools.items()))],
+        ["Radio interaction", "none — read-only evidence only"],
+    ]
+    return f"""
+    <div class="card"><h2>Bluetooth / BLE communication surface</h2>
+      <p class="meta">{esc(bluetooth.get('notice') or '')}</p>
+      {_table(["Property", "Value"], rows)}
+      <p class="meta">Bluetooth tooling is not a malware or threat detection engine. No radio scan, pairing or device modification was performed; these findings are informational evidence for manual review only.</p>
+    </div>"""
+
+
 def _chain_section(chains: list[dict[str, Any]], playbook: list[str], compliance: dict[str, Any]) -> str:
     if not chains and not playbook and not compliance:
         return ""
@@ -413,6 +436,7 @@ footer{{color:var(--muted);font-size:12px;text-align:center;margin-top:32px}}
 {_chain_section(data.get('attack_chains') or [], data.get('playbook') or [], data.get('compliance') or {})}
 {_advanced_section(data.get('advanced') or {}, data.get('live_checks') or [])}
 {_pki_section(data.get('pki') or {}, cert)}
+{_bluetooth_section(data.get('bluetooth') or {})}
 
 <div class="card"><h2>Application metadata</h2><div class="kv">
   <div><span>Package</span>{esc(manifest.get('package'))}</div>

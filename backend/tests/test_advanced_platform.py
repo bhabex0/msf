@@ -24,17 +24,24 @@ from app.scanner import sca as sca_module  # noqa: E402
 from app.scanner import tools as tools_module  # noqa: E402
 from app.scanner.advanced import (  # noqa: E402
     analyze_advanced,
+    analyze_entropy,
     parse_elf,
     shannon_entropy,
 )
 from app.scanner.apk import ApkPackage, find_all  # noqa: E402
+from app.scanner.bluetooth import analyze_bluetooth, bluetooth_lab_status  # noqa: E402
 from app.scanner.custom import load_custom_rules, run_custom_rules, validate_rule  # noqa: E402
 from app.scanner.exports import cyclonedx_sbom, diff_scans, sarif_report  # noqa: E402
 from app.scanner.lab import (  # noqa: E402
+    adb_command,
     apply_proxy,
+    build_emulator_dast_plan,
     build_lab_plan,
+    emulator_status,
+    launch_emulator,
     open_mobsf_browser,
     run_patch_step,
+    stop_emulator,
 )
 from app.scanner.live import run_live_checks  # noqa: E402
 from app.scanner.medical import analyze_medical  # noqa: E402
@@ -946,6 +953,214 @@ class AdvancedFeatureTests(unittest.TestCase):
                 self.assertIn("HTTP 502", str(caught.exception))
                 self.assertIn("3 attempt(s)", str(caught.exception))
                 self.assertEqual(client.calls, 3)
+
+
+class PassiveBluetoothAndEmulatorTests(unittest.TestCase):
+    """Bluetooth/BLE passive evidence and gated emulator/DAST wiring."""
+
+    def test_bluetooth_findings_are_informational_only(self):
+        result = analyze_bluetooth(
+            {
+                "permissions": [
+                    "android.permission.BLUETOOTH_SCAN",
+                    "android.permission.ACCESS_FINE_LOCATION",
+                ]
+            },
+            [
+                "BluetoothLeScanner", "BluetoothGatt", "createBond",
+                "0000180a-0000-1000-8000-00805f9b34fb",
+            ],
+        )
+        ids = {f["id"] for f in result["findings"]}
+        self.assertIn("BT-PERMISSIONS", ids)
+        self.assertIn("BT-BLE-SURFACE", ids)
+        self.assertIn("BT-PAIRING-SURFACE", ids)
+        self.assertIn("BT-UUIDS", ids)
+        self.assertTrue(all(f["severity"] == "info" for f in result["findings"]))
+        self.assertTrue(all(f["category"] == "BLUETOOTH" for f in result["findings"]))
+        self.assertTrue(all("not a malware" in f["description"] for f in result["findings"]))
+        self.assertIn("not a malware/threat detection engine", result["notice"])
+        self.assertFalse(result["lab"]["device_scanning"])
+        self.assertFalse(result["lab"]["pairing_or_bonding"])
+        self.assertEqual(result["summary"]["finding_count"], len(result["findings"]))
+
+    def test_bluetooth_artifacts_are_excluded_from_heuristics(self):
+        artifacts = [
+            "bluetoothctl", "hcitool", "nrfutil",
+            "550e8400-e29b-41d4-a716-446655440000",
+        ]
+        self.assertTrue(all(is_benign_pki_string(s) for s in artifacts))
+        apk = ApkPackage(SAMPLE)
+        ctx = SastContext(
+            apk=apk, manifest={}, summary={}, network_config=None,
+            app_node=None, extra_strings=artifacts,
+        )
+        for token in ("bluetoothctl", "hcitool", "nrfutil"):
+            self.assertEqual(ctx.containing(token), [])
+        with patch("app.scanner.advanced.shannon_entropy", return_value=5.0):
+            candidates, _ = analyze_entropy(artifacts)
+        self.assertEqual(candidates, [])
+
+    def test_policy_never_counts_passive_findings(self):
+        record = ScanRecord(scan_id="btpolicy0000001", filename="bt.apk")
+        record.findings = [
+            Finding(id="BT-FORCED-HIGH", title="forced high", severity="high", category="BLUETOOTH"),
+            Finding(id="PKI-FORCED-HIGH", title="forced high", severity="high", category="PKI"),
+        ]
+        policy = evaluate_policy(record, thresholds={
+            "critical": 0, "high": 0, "medium": 0, "low": 0,
+        })
+        self.assertEqual(policy["status"], "pass")
+        self.assertEqual(policy["actual"]["high"], 0)
+        self.assertEqual(policy["pki_findings_excluded"], 1)
+        self.assertEqual(policy["bluetooth_findings_excluded"], 1)
+        self.assertEqual(policy["passive_findings_excluded"], 2)
+
+    def test_bluetooth_lab_status_is_gated_and_read_only(self):
+        with patch.object(config, "BLUETOOTH_LAB_ENABLED", False):
+            status = bluetooth_lab_status()
+        self.assertFalse(status["enabled"])
+        self.assertTrue(all(value is None for value in status["tools"].values()))
+        self.assertTrue(status["read_only"])
+        self.assertFalse(status["device_scanning"])
+        self.assertIn("never scans", status["detail"])
+
+        with patch.object(config, "BLUETOOTH_LAB_ENABLED", True):
+            enabled = bluetooth_lab_status()
+        self.assertTrue(enabled["enabled"])
+        self.assertIn("bluetoothctl", enabled["tools"])
+
+    def test_emulator_actions_require_confirm_and_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.multiple(
+                config, EMULATOR_AUTO=False, EMULATOR_CMD="",
+                ANDROID_SDK_ROOT=str(Path(tmp) / "missing-sdk"),
+            ):
+                self.assertEqual(launch_emulator(False)["status"], "skipped")
+                gated = launch_emulator(True)
+                self.assertEqual(gated["status"], "skipped")
+                self.assertIn("APKPT_EMULATOR_AUTO", gated["detail"])
+                self.assertFalse(gated["performed"])
+                self.assertEqual(stop_emulator(True)["status"], "skipped")
+
+            with patch.multiple(
+                config, EMULATOR_AUTO=True, EMULATOR_CMD="",
+                ANDROID_SDK_ROOT=str(Path(tmp) / "missing-sdk"),
+            ):
+                missing = launch_emulator(True)
+                self.assertEqual(missing["status"], "skipped")
+                self.assertIn("not found", missing["detail"])
+
+    def test_emulator_status_exposes_readiness_and_plan(self):
+        with patch("app.scanner.lab._run", return_value=(0, "List of devices attached\n")), \
+                patch.multiple(
+                    config, ADB_CMD="adb", DAST_DEVICE_SERIAL="",
+                    DAST_PREFER_EMULATOR=True, EMULATOR_AUTO=False,
+                    EMULATOR_AVD="apkpt_test_avd",
+                ):
+            status = emulator_status()
+        self.assertTrue(status["launch_gated"])
+        self.assertFalse(status["ready_for_dast"])
+        self.assertIsNone(status["dast_serial"])
+        self.assertIn("paths", status)
+        self.assertEqual(status["paths"]["avd"], "apkpt_test_avd")
+        self.assertEqual(
+            [step["name"] for step in status["dast_plan"]],
+            ["create_avd", "launch_avd", "verify_adb", "run_dast", "teardown"],
+        )
+        self.assertEqual(status["dast_plan"][1]["status"], "gated")
+        self.assertEqual(build_emulator_dast_plan(), status["dast_plan"])
+
+    def test_emulator_selects_attached_emulator_when_no_serial(self):
+        devices = "List of devices attached\nemulator-5554\tdevice\n"
+        with patch("app.scanner.lab._run", return_value=(0, devices)), \
+                patch("app.scanner.lab.shutil.which", return_value="adb"), \
+                patch.multiple(
+                    config, ADB_CMD="adb", DAST_DEVICE_SERIAL="",
+                    DAST_PREFER_EMULATOR=True, EMULATOR_AUTO=False,
+                ):
+            status = emulator_status()
+        self.assertEqual(status["emulator_devices"], ["emulator-5554"])
+        self.assertEqual(status["dast_serial"], "emulator-5554")
+        self.assertTrue(status["ready_for_dast"])
+
+    def test_new_api_endpoints_are_read_only_and_gated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.multiple(
+                config, AUTH_ENABLED=False, AUDIT_LOG=Path(tmp) / "audit.log",
+                EMULATOR_AUTO=False, BLUETOOTH_LAB_ENABLED=False,
+            ), TestClient(app) as client:
+                self.assertEqual(client.get("/api/lab/emulator").status_code, 200)
+                plan = client.get("/api/lab/emulator/plan")
+                self.assertEqual(plan.status_code, 200)
+                self.assertEqual(len(plan.json()["steps"]), 5)
+                bt = client.get("/api/bluetooth/status")
+                self.assertEqual(bt.status_code, 200)
+                self.assertTrue(bt.json()["read_only"])
+                self.assertFalse(bt.json()["device_scanning"])
+                launched = client.post("/api/lab/emulator/launch", json={"confirm": True})
+                self.assertEqual(launched.status_code, 200)
+                self.assertEqual(launched.json()["status"], "skipped")
+                self.assertFalse(launched.json()["performed"])
+                stopped = client.post("/api/lab/emulator/stop", json={"confirm": True})
+                self.assertEqual(stopped.status_code, 200)
+                self.assertFalse(stopped.json()["performed"])
+                health = client.get("/api/health")
+                self.assertTrue(health.json()["engines"]["bluetooth"])
+
+    def test_report_and_static_ui_include_bluetooth_disclaimer(self):
+        result = analyze_bluetooth(
+            {"permissions": ["android.permission.BLUETOOTH_SCAN"]},
+            ["BluetoothLeScanner"],
+        )
+        record = ScanRecord(
+            scan_id="bttest00000001", filename="bt.apk",
+            bluetooth={k: v for k, v in result.items() if k != "findings"},
+        )
+        html = generate_html_report(record)
+        self.assertIn("Bluetooth / BLE communication surface", html)
+        self.assertIn("No radio scan, pairing or device modification", html)
+        self.assertIn("not a malware or threat detection engine", html)
+
+        with TestClient(app) as client:
+            page = client.get("/")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn("Bluetooth", page.text)
+            self.assertNotIn("APKPT_BROWSER_OPEN", page.text)
+            self.assertNotIn("Job log colours", page.text)
+
+    def test_bluetooth_catalog_entries_are_manual(self):
+        self.assertEqual(
+            [group["id"] for group in tool_manager.TOOL_GROUPS],
+            ["decode", "static", "device", "runtime", "dynamic", "proxy", "root"],
+        )
+        for tool_id in ("bluetoothctl", "hcitool", "nrfutil"):
+            spec = tool_manager.SPEC_BY_ID[tool_id]
+            self.assertTrue(spec.manual)
+            self.assertEqual(tool_manager.tool_group(spec)["id"], "device")
+
+    def test_adb_resolves_from_sdk_when_not_on_path(self):
+        suffix = ".exe" if os.name == "nt" else ""
+        with tempfile.TemporaryDirectory() as tmp:
+            sdk = Path(tmp) / "android-sdk"
+            sdk_adb = sdk / "platform-tools" / f"adb{suffix}"
+            sdk_adb.parent.mkdir(parents=True)
+            sdk_adb.write_text("stub", encoding="utf-8")
+
+            with patch("app.scanner.lab.shutil.which", return_value=None), \
+                    patch.multiple(config, ADB_CMD="adb", ANDROID_SDK_ROOT=sdk):
+                resolved = adb_command()
+                status = emulator_status()
+            self.assertEqual(resolved, [str(sdk_adb)])
+            self.assertTrue(status["adb_available"])
+            self.assertEqual(status["adb_command"], str(sdk_adb))
+            self.assertTrue(status["paths"]["platform_tools_adb_available"])
+            self.assertIn(str(sdk_adb), status["paths"]["platform_tools_adb"])
+
+            # An explicitly configured command that exists always wins.
+            with patch("app.scanner.lab.shutil.which", return_value=None), \
+                    patch.multiple(config, ADB_CMD=str(sdk_adb), ANDROID_SDK_ROOT=sdk):
+                self.assertEqual(adb_command(), [str(sdk_adb)])
 
 
 if __name__ == "__main__":

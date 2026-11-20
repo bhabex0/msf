@@ -14,6 +14,8 @@ Research basis: OWASP MASVS v2.1, OWASP MASTG v2.0, OWASP MASWE, OWASP DevSecOps
 
 > **PKI scope note:** `keytool`, `openssl`, `apksigner` and local CA/keystore material are benign evidence-gathering and lab tooling. The platform's PKI support is **not** a malware, threat or exploit-detection engine. Exact PKI tool/certificate artifact strings and SHA-256 fingerprints are excluded from suspicious-string and entropy heuristics, and all `PKI` findings are informational and excluded from release-policy gates.
 
+> **Bluetooth scope note:** Bluetooth/BLE support is passive, informational evidence gathering only. The platform never performs a radio scan, pairing, bonding or any device modification. Bluetooth tool names and UUID-shaped values are excluded from suspicious-string and entropy heuristics, all `BLUETOOTH` findings carry an explicit non-malware disposition, and they are excluded from release-policy gates. Bluetooth tooling is **not** a malware, threat or exploit-detection engine.
+
 ---
 
 ## 1. Testing standards and coverage model
@@ -73,7 +75,8 @@ Use them together: SAST + SCA early, DAST + IAST in test/staging, manual review 
 | Medical | **Medical** | PHI indicators, health permissions, cleartext/logging/storage correlation, HIPAA/GDPR/FDA/IEC/ISO/UL/HITRUST/MASVS evidence mapping |
 | Live | **Live** | Opt-in Firebase/S3/plaintext endpoint checks and optional VirusTotal reputation |
 | Dynamic | **Dynamic** | adb install/launch/logcat, deep links, exported-component fuzzing, optional Frida hooks and proxy capture |
-| Lab | **Lab** | Burp/ZAP/mitmproxy listener commands, proxy CA steps, NSC warnings, gated patch/root workflows |
+| Bluetooth | **Bluetooth** | Passive Bluetooth permissions, BLE/GATT/classic API strings, pairing APIs and UUID evidence for manual review; never scans or pairs |
+| Lab | **Lab** | Burp/ZAP/mitmproxy listener commands, proxy CA steps, NSC warnings, gated emulator launch/stop and gated patch/root workflows |
 | Policy | **Policy** | Severity and compliance gates |
 | Diff | **Diff** | New, resolved and changed findings between scans |
 | Report | **Report** | HTML/JSON reports, CycloneDX SBOM, SARIF |
@@ -90,6 +93,8 @@ These defaults are intentional:
 | `APKPT_ALLOW_INVASIVE` | `0` | No patch/root/mod workflows unless explicitly enabled and authenticated |
 | `APKPT_TOOL_MANAGER` | `0` | Install/update/pull jobs must be explicitly enabled |
 | `APKPT_BROWSER_OPEN` | `0` | Server-side browser/MobSF opening must be explicitly enabled |
+| `APKPT_BLUETOOTH_LAB` | `0` | Optional read-only probe of local Bluetooth tool availability |
+| `APKPT_WEB_UI` | `static` | `react` serves the built React app; the static dashboard is active by default |
 
 Manual tools and invasive tools are never falsely presented as one-click installs. When a tool cannot be auto-installed, the UI shows **Manual** / **Unavailable**, **Verify**, and **Why** with the exact reason.
 
@@ -114,7 +119,7 @@ Open **Tools & emulator manager** in the sidebar or visit `/tools/dashboard`. To
 | `apktool` | Decode | Decode resources to smali/XML; rebuild modified APKs | Install, then `apktool d app.apk -o out` | Requires Java. Rebuilding produces an unsigned APK that must be re-signed |
 | `jadx` | Decode | DEX to Java/Kotlin decompiler, GUI and CLI | `jadx -d jadx-out app.apk` or `jadx-gui` | Requires Java. Best for code search and xrefs |
 | `aapt2` | Decode | Manifest/badging metadata | `aapt2 dump badging app.apk` | Installed through Android build-tools |
-| `platform-tools` | Device | `adb`, `fastboot` | `adb devices`, `adb install app.apk`, `adb logcat` | Required for DAST and device work |
+| `platform-tools` | Device | `adb`, `fastboot` | `adb devices`, `adb install app.apk`, `adb logcat` | Required for DAST and device work; `adb` is auto-discovered from `ANDROID_SDK_ROOT/platform-tools` when not on PATH (`APKPT_ADB_CMD` overrides) |
 | `cmdline-tools` | Emulator | `sdkmanager`, `avdmanager` | Install SDK packages and create AVDs | Requires Java |
 | `apkleaks` | Static | URIs, endpoints and secrets in APKs | `apkleaks -f app.apk -o report.txt` | Python package |
 | `apkhunt` | Static | OWASP MASVS-oriented static workbench | Clone via manager, then start its documented web/Docker workflow | v2+ uses Docker Compose; manual startup |
@@ -129,6 +134,9 @@ Open **Tools & emulator manager** in the sidebar or visit `/tools/dashboard`. To
 | `zaproxy` | Proxy | Intercepting proxy and web/API scanner | Use official installer; configure proxy and scope | **Manual** tool |
 | `burp` | Proxy | Licensed interception proxy | Use PortSwigger installer and accept license | **Manual** tool |
 | `chromium` | Browser | Browser used for configured web UIs | Install via OS package manager; set `APKPT_CHROMIUM_CMD` if needed | **Manual** tool |
+| `bluetoothctl` | Device | Official BlueZ utility for local adapter inspection | `bluetoothctl` then `show`/`info` on authorized lab adapters | **Manual/verify only**; read-only; no scanning or pairing by the platform |
+| `hcitool` | Device | BlueZ HCI adapter information | `hcitool dev` on authorized lab hardware | **Manual/verify only**; deprecated on newer BlueZ |
+| `nrfutil` | Device | Nordic Semiconductor BLE development CLI | Use official Nordic distribution with authorized lab hardware | **Manual/verify only**; informational |
 | `apatch` | Root | Root/system modification for owned lab devices | Perform manually only in an authorized lab | **Manual + invasive** |
 | `recmanager` | Root | Magisk module/repository management | Install manually on authorized rooted device | **Manual + invasive** |
 
@@ -240,6 +248,14 @@ $env:APKPT_DAST_PROXY='burp'
 python run.py --port 8000
 ```
 
+Emulator-backed DAST is intentionally gated and observable:
+
+- `GET /api/lab/emulator` reports adb availability, attached emulator/physical serials, the selected DAST target (an explicit `APKPT_DAST_SERIAL` wins; otherwise an emulator is preferred when `APKPT_DAST_PREFER_EMULATOR=1`), AVD presence and SDK paths.
+- `GET /api/lab/emulator/plan` returns a non-executing plan: create AVD → launch → verify adb → run DAST → teardown.
+- Set up the local AVD with the explicit, audited job: `POST /api/tools/emulator/install` with `{"confirm": true}` (requires `APKPT_TOOL_MANAGER=1`). This installs official Android SDK packages and creates `apkpt_test_avd`; it never launches the emulator.
+- `POST /api/lab/emulator/launch` / `/api/lab/emulator/stop` require `confirm: true` and `APKPT_EMULATOR_AUTO=1`. With the default `APKPT_EMULATOR_AUTO=0` they return `skipped`. No emulator is ever launched automatically by a scan.
+- DAST records include `emulator_target` and `dast_info.lab` (readiness + plan), visible in the static/React **Lab** tabs. Hardware acceleration is required to launch an AVD; the platform reports missing binaries or acceleration as `skipped`, not silent failures.
+
 ### 4.3 Runtime instrumentation
 
 Frida:
@@ -308,6 +324,27 @@ docker run --rm -t ghcr.io/zaproxy/zaproxy:stable \
 ```
 
 Active scans perform attacks. Run them only in isolated test environments.
+
+### 4.5 Bluetooth / BLE evidence (passive only)
+
+The platform reads Bluetooth-related manifest permissions and APK strings and reports them as informational `BLUETOOTH` findings in the **Bluetooth** tab, `GET /api/scans/{id}/bluetooth`, the HTML report and `GET /api/scans/{id}`. It reports:
+
+- Permissions such as `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_ADVERTISE` and location permissions used for legacy BLE scanning.
+- BLE/GATT API strings (`BluetoothLeScanner`, `BluetoothGatt`, `writeCharacteristic`, …), classic RFCOMM/socket APIs and pairing/bonding APIs.
+- UUID-shaped values that may identify GATT services or characteristics.
+
+Manual follow-up on an authorized lab device (never automated by the platform):
+
+```bash
+# Read-only local adapter information
+bluetoothctl show
+hcitool dev
+
+# Nordic BLE tooling with authorized hardware
+nrfutil --version
+```
+
+`GET /api/bluetooth/status` reports local tool availability; it probes nothing unless `APKPT_BLUETOOTH_LAB=1` and never scans, pairs, bonds or changes a device. All catalog entries are manual/verify-only. Findings are informational evidence, carry an explicit non-malware disposition, are excluded from threat heuristics and cannot fail a release gate.
 
 ---
 
@@ -609,10 +646,16 @@ $env:APKPT_BROWSER_OPEN='1'
 $env:APKPT_MOBSF_URL='http://127.0.0.1:8000'
 $env:APKPT_MOBSF_API_KEY='<api-key>'
 
-# DAST target
+# DAST target (emulator preferred by default when attached)
 $env:APKPT_DAST_SERIAL='emulator-5554'
 $env:APKPT_DAST_FRIDA='1'
 $env:APKPT_DAST_PROXY='burp'
+
+# Optional Bluetooth read-only tooling status
+$env:APKPT_BLUETOOTH_LAB='1'
+
+# Explicitly serve the built React UI instead of the static dashboard
+$env:APKPT_WEB_UI='react'
 
 python run.py --port 8000
 ```
@@ -628,7 +671,7 @@ Notes:
 - Python 3.15 is supported by the platform, but some upstream packages (`semgrep`, MobSF native dependencies) may lack compatible wheels. The platform reports these as **Unavailable** with **Why** and records install jobs as `skipped` rather than emitting long pip tracebacks.
 - Use Python 3.10–3.14 or the official manual guide for those tools, then run **Verify**.
 - `setx` affects new terminals only; in the current PowerShell session use `$env:` assignments.
-- The static UI and `/tools/dashboard` are active; React components are maintained but unbuilt because Node/npm are unavailable in this environment.
+- The static UI and `/tools/dashboard` are active by default; the React source is maintained and built, and can be served with `APKPT_WEB_UI=react`.
 
 ---
 
@@ -689,6 +732,9 @@ Before any action:
 - objection: https://github.com/sensepost/objection
 - drozer: https://github.com/ReversecLabs/drozer
 - Android platform-tools: https://developer.android.com/tools/releases/platform-tools
+- Android emulator / AVD manager: https://developer.android.com/studio/run/managing-avds
+- BlueZ: https://www.bluez.org/
+- Nordic Semiconductor nRF Util: https://www.nordicsemi.com/Products/Development-tools/nRF-Util
 - Burp Suite: https://portswigger.net/burp
 - Contrast IAST: https://docs.contrastsecurity.com/en/iast-technology.html
 - Black Duck Seeker: https://www.blackduck.com/interactive-application-security-testing.html

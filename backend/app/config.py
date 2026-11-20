@@ -34,6 +34,8 @@ DAST_LAUNCH_WAIT_SECONDS = int(os.getenv("APKPT_DAST_WAIT", "12"))
 DAST_FRIDA = os.getenv("APKPT_DAST_FRIDA", "0") == "1"
 DAST_PROXY = os.getenv("APKPT_DAST_PROXY", "").strip()
 DAST_UNINSTALL_AFTER = os.getenv("APKPT_DAST_UNINSTALL", "1") == "1"
+# Prefer an attached emulator serial when more than one adb device is present.
+DAST_PREFER_EMULATOR = os.getenv("APKPT_DAST_PREFER_EMULATOR", "1") == "1"
 
 # ---------------------------------------------------------------- tool hooks
 TOOL_APKTOOL = os.getenv("APKPT_TOOL_APKTOOL", "1") == "1"
@@ -160,7 +162,8 @@ TOOL_ALLOWED_HOSTS = {
             "raw.githubusercontent.com", "dl.google.com", "developer.android.com",
             "docs.oracle.com", "docs.openssl.org", "www.openssl.org",
             "pypi.org", "files.pythonhosted.org", "zaproxy.org",
-            "portswigger.net", "www.chromium.org",
+            "portswigger.net", "www.chromium.org", "www.bluez.org",
+            "www.nordicsemi.com", "developer.nordicsemi.com",
         )),
     ).split(",")
     if host.strip()
@@ -177,9 +180,22 @@ PKI_DIR = Path(os.getenv("APKPT_PKI_DIR", str(TOOLS_ROOT / "pki")))
 PKI_CA_DAYS = max(1, int(os.getenv("APKPT_PKI_CA_DAYS", "365")))
 PKI_KEYSTORE_PASSWORD = os.getenv("APKPT_PKI_KEYSTORE_PASSWORD", "changeit")
 
+# ---------------------------------------------------------------- Bluetooth
+# Passive/read-only Bluetooth evidence. No radio scan, pairing or bonding is
+# ever performed by the platform. The gate only exposes optional local tooling
+# status and is off by default.
+BLUETOOTH_LAB_ENABLED = os.getenv("APKPT_BLUETOOTH_LAB", "0") == "1"
+BLUETOOTHCTL_CMD = os.getenv("APKPT_BLUETOOTHCTL_CMD", "bluetoothctl")
+HCITOOL_CMD = os.getenv("APKPT_HCITOOL_CMD", "hcitool")
+NRFUTIL_CMD = os.getenv("APKPT_NRFUTIL_CMD", "nrfutil")
+
 MOBSF_DYNAMIC_URL = os.getenv("APKPT_MOBSF_DYNAMIC_URL", MOBSF_URL)
 # Explicit endpoint action only: open an authorised MobSF UI in Chromium.
 BROWSER_OPEN_ENABLED = os.getenv("APKPT_BROWSER_OPEN", "0") == "1"
+
+# The zero-dependency static dashboard is the active UI. The React source is
+# maintained and built, and can be served explicitly with APKPT_WEB_UI=react.
+WEB_UI = os.getenv("APKPT_WEB_UI", "static").strip().lower()
 
 # ---------------------------------------------------------------- server
 CORS_ORIGINS = [

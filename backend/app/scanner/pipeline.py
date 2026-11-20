@@ -17,6 +17,7 @@ from ..models import (
 )
 from .apk import ApkPackage, find_all
 from .advanced import AdvancedResult, analyze_advanced, build_compliance
+from .bluetooth import analyze_bluetooth
 from .custom import load_custom_rules, run_custom_rules
 from .dast import DastResult, run_dast
 from .exports import save_exports
@@ -193,6 +194,16 @@ def run_scan(scan_id: str) -> None:
         )
         record.pki = {k: v for k, v in pki.items() if k != "findings"}
         all_findings.extend(pki.get("findings", []))
+        _save(record, "Bluetooth analysis", 71)
+
+        bluetooth = _safe(
+            "Bluetooth",
+            lambda: analyze_bluetooth(summary, apk.all_strings + tool_strings),
+            {"status": "error", "summary": {}, "lab": {}, "findings": []},
+            all_findings,
+        )
+        record.bluetooth = {k: v for k, v in bluetooth.items() if k != "findings"}
+        all_findings.extend(bluetooth.get("findings", []))
         _save(record, "advanced analysis", 72)
 
         if config.ENABLE_ADVANCED:

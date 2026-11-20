@@ -14,14 +14,23 @@ def evaluate_policy(record: ScanRecord, thresholds: dict[str, int] | None = None
     if thresholds:
         limits.update({k: int(v) for k, v in thresholds.items() if k in limits})
 
-    # PKI evidence is informational context only. It is never counted as a
-    # threat/malware signal and can never fail a release gate, regardless of
-    # the severity stored on an individual PKI finding.
+    # PKI and Bluetooth evidence is informational context only. It is never
+    # counted as a threat/malware signal and can never fail a release gate,
+    # regardless of the severity stored on an individual passive finding.
+    passive_categories = {"PKI", "BLUETOOTH"}
+    all_findings = list(record.findings) + list(record.sca_findings)
     gate_findings = [
-        f for f in (list(record.findings) + list(record.sca_findings))
-        if getattr(f, "category", "") != "PKI"
+        f for f in all_findings
+        if getattr(f, "category", "") not in passive_categories
     ]
-    pki_findings_excluded = len(record.findings) + len(record.sca_findings) - len(gate_findings)
+    excluded_by_category = {
+        category: sum(
+            1 for f in all_findings if getattr(f, "category", "") == category
+        )
+        for category in passive_categories
+    }
+    pki_findings_excluded = excluded_by_category["PKI"]
+    bluetooth_findings_excluded = excluded_by_category["BLUETOOTH"]
     counted = {sev: 0 for sev in ("critical", "high", "medium", "low", "info")}
     for item in gate_findings:
         sev = getattr(item, "severity", "info")
@@ -65,6 +74,8 @@ def evaluate_policy(record: ScanRecord, thresholds: dict[str, int] | None = None
         "thresholds": limits,
         "actual": actual,
         "pki_findings_excluded": pki_findings_excluded,
+        "bluetooth_findings_excluded": bluetooth_findings_excluded,
+        "passive_findings_excluded": sum(excluded_by_category.values()),
         "violations": violations,
         "risk_score": record.summary.risk_score,
         "medical_gate": medical_gate,

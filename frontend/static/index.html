@@ -168,7 +168,7 @@ pre{background:#0a1425;border:1px solid var(--line);border-radius:8px;padding:12
 const $ = (s) => document.querySelector(s)
 const esc = (v) => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 const SEV = ['critical','high','medium','low','info']
-let state = { health:null, scans:[], active:null, record:null, timer:null, tab:'Findings', filter:'all', query:'', view:'scan', catalog:null, jobs:[], installed:[], jobTimer:null, toolMsg:'', toolMsgLevel:'', pkiMsg:'', pkiMsgLevel:'info', toolQuery:'', toolGroup:'all', shell:{open:false,pinned:false,lines:[],jobId:null,lastLog:0,timer:null,hideTimer:null,history:[],historyIndex:0}, autoTerm:{jobId:null,lines:[],label:'',status:'',finished:false,hideTimer:null,timer:null} }
+let state = { health:null, scans:[], active:null, record:null, timer:null, tab:'Findings', filter:'all', query:'', view:'scan', catalog:null, jobs:[], installed:[], jobTimer:null, toolMsg:'', toolMsgLevel:'', pkiMsg:'', pkiMsgLevel:'info', emulatorMsg:'', emulatorMsgLevel:'info', toolQuery:'', toolGroup:'all', shell:{open:false,pinned:false,lines:[],jobId:null,lastLog:0,timer:null,hideTimer:null,history:[],historyIndex:0}, autoTerm:{jobId:null,lines:[],label:'',status:'',finished:false,hideTimer:null,timer:null} }
 
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms))
 async function api(path, options={}) {
@@ -246,10 +246,11 @@ function renderMain() {
         <div><strong>Dynamic analysis</strong><span>adb-driven install/launch/logcat checks, intent fuzzing, deep-link tests, optional Frida hooks and proxy capture.</span></div>
         <div><strong>Advanced analysis</strong><span>Deep links, NSC hardening, native ELF hardening, trackers, packers, attack chains, compliance mapping and live checks.</span></div>
         <div><strong>PKI &amp; signing</strong><span>Signing certificate fingerprints, algorithm/key-size checks, TLS trust configuration and local lab CA/keystore controls.</span></div>
+        <div><strong>Bluetooth &amp; BLE</strong><span>Passive Bluetooth permission, GATT/API and UUID evidence for manual review. No radio scan, pairing or device changes are performed.</span></div>
         <div><strong>Enterprise exports</strong><span>CycloneDX SBOM, SARIF, policy gates, scan diffing, custom rules, optional auth and an append-only audit log.</span></div>
         <div><strong>Medical / PHI focus</strong><span>Masked clinical-identifier detection, HIPAA/GDPR/FDA/IEC 62304 evidence mapping and healthcare control gaps.</span></div>
         <div><strong>Advanced toolchain &amp; lab</strong><span>APKHunt, APKLeaks, AppScan, MobSF dynamic, TrashDroid, Burp/ZAP/mitmproxy, Chromium and patching plans.</span></div>
-        <div><strong>Tool manager</strong><span>One-click install/update jobs, per-tool repository pull, source verification and Android emulator setup with live logs.</span></div>
+        <div><strong>Tool manager</strong><span>One-click install/update jobs, per-tool repository pull, source verification and Android emulator setup with live logs. Emulator-backed DAST is guided by a gated readiness plan.</span></div>
       </div><p class="muted small" style="margin-top:24px">For authorized security testing only. Heuristic findings require manual verification. Medical mappings are not certifications.</p></div>`
     return
   }
@@ -273,7 +274,7 @@ function resultHead(r) {
 }
 
 function tabs(r) {
-  const names=['Findings','Components','Advanced','PKI','Chains','Medical','Toolchain','Lab','Live','Policy','Dynamic','Tools','Metadata','Diff','Report']
+  const names=['Findings','Components','Advanced','PKI','Bluetooth','Chains','Medical','Toolchain','Lab','Live','Policy','Dynamic','Tools','Metadata','Diff','Report']
   return `<div class="tabs">${names.map(n=>`<button class="${state.tab===n?'active':''}" data-tab="${n}">${n}</button>`).join('')}</div>`
 }
 
@@ -339,6 +340,26 @@ function pkiTab(r) {
   </div>`
 }
 
+function bluetoothTab(r) {
+  const b=r.bluetooth||{}, s=b.summary||{}, l=b.lab||{}, tools=l.tools||{}
+  const rows=[['Status',b.status],['Permissions',(s.permissions||[]).join(', ')||'none observed'],
+    ['BLE APIs',(s.ble_tokens||[]).join(', ')||'none observed'],
+    ['Classic APIs',(s.classic_tokens||[]).join(', ')||'none observed'],
+    ['Pairing APIs',(s.pairing_tokens||[]).join(', ')||'none observed'],
+    ['UUID-like values',(s.uuids||[]).join(', ')||'none observed'],
+    ['Bluetooth findings',s.finding_count]]
+  const lab=[['Lab enabled',l.enabled],['Read only',l.read_only],['Radio scan',l.device_scanning],
+    ['Pairing / bonding',l.pairing_or_bonding],
+    ...Object.entries(tools).map(([k,v])=>[k,v===null?'gated (APKPT_BLUETOOTH_LAB=0)':v?'available':'not found'])]
+  return `<div class="mgrid">
+    <div class="mc"><h3>Bluetooth / BLE evidence</h3>${table(['Property','Value'],rows)}
+      <p class="muted small">${esc(b.notice||'')}</p>
+      <p class="muted small"><strong>Not a malware/threat detection tool.</strong> Bluetooth observations are informational evidence only and never count as threat findings or release-gate failures.</p></div>
+    <div class="mc"><h3>Local tooling (read-only)</h3>${table(['Property','Value'],lab)}
+      <p class="muted small">${esc(l.detail||'')}</p></div>
+  </div>`
+}
+
 async function runPkiAction(action) {
   state.pkiMsg='Working…'; state.pkiMsgLevel='info'; renderMain()
   try {
@@ -395,19 +416,49 @@ function toolchainTab(r) {
 
 function labTab(r) {
   const l=r.emulator||{}, e=l.emulator||{}, p=l.proxy||{}, patch=l.patching||{}
+  const dl=(r.dast_info||{}).lab||{}
   const rows=[['Authorization',l.authorization],['Proxy',p.configured?`${p.type} @ ${p.endpoint}`:'not configured'],
     ['ADB available',e.adb_available],['Devices',(e.devices||[]).join(', ')||'none'],
     ['Emulator available',e.emulator_available],['CA certificate',(l.ca_installation||{}).path||'not configured'],
     ['Invasive allowed',e.invasive_allowed]]
   const cmds=(l.commands||[]).map(c=>[c.name,c.command])
   const steps=(patch.steps||[]).map(s=>[s.name,s.status,s.available?'yes':'no',s.command])
-  return `<div class="mgrid">
+  const emu=[['Selected adb serial',(r.dast_info||{}).selected_serial||'none'],
+    ['Emulator devices',(dl.emulator_devices||[]).join(', ')||'none'],
+    ['AVD',dl.avd||'default'],['AVD created',dl.avd_created],
+    ['Launch gated',dl.launch_gated],['Plan steps',(dl.dast_plan||[]).length]]
+  const plan=(dl.dast_plan||[]).map(s=>[s.name,s.status,s.command,s.detail])
+  const msg=state.emulatorMsg?`<div class="banner ${state.emulatorMsgLevel==='err'?'err':'info'}">${esc(state.emulatorMsg)}</div>`:''
+  return msg+`<div class="mgrid">
     <div class="mc"><h3>Interception lab</h3>${table(['Property','Value'],rows)}</div>
+    <div class="mc"><h3>Emulator / DAST readiness</h3>${table(['Property','Value'],emu)}
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn" data-emulator-action="refresh">Refresh status</button>
+        <button class="btn primary" data-emulator-action="launch">Launch local AVD</button>
+        <button class="btn" data-emulator-action="stop">Stop local AVD</button>
+      </div>
+      <p class="muted small">Launch/stop require APKPT_EMULATOR_AUTO=1 and an explicit confirmed action. No emulator is ever launched automatically.</p></div>
+    <div class="mc"><h3>Emulator DAST plan</h3>${table(['Step','Status','Command','Detail'],plan,'No emulator plan available for this scan.')}</div>
     <div class="mc"><h3>Generated commands</h3>${table(['Step','Command'],cmds,'No lab commands generated.')}</div>
     <div class="mc"><h3>Network security config notes</h3><ul>${(l.network_security_notes||[]).map(n=>`<li>${esc(n)}</li>`).join('')||'<li class="muted">No NSC notes.</li>'}</ul></div>
     <div class="mc"><h3>Patch / instrumentation workflows</h3>${table(['Workflow','Status','Available','Command'],steps,'No workflows.')}
       <p class="muted small">Invasive workflows require explicit opt-in and authentication. They are not silently executed during a scan.</p></div>
   </div>`
+}
+
+async function runEmulatorAction(action) {
+  state.emulatorMsg='Working…'; state.emulatorMsgLevel='info'; renderMain()
+  try {
+    const headers={'Content-Type':'application/json'}
+    let result
+    if (action==='refresh') result=await api('/api/lab/emulator')
+    else if (action==='launch') result=await api('/api/lab/emulator/launch',{method:'POST',headers,body:JSON.stringify({confirm:true})})
+    else if (action==='stop') result=await api('/api/lab/emulator/stop',{method:'POST',headers,body:JSON.stringify({confirm:true})})
+    else throw new Error(`Unknown emulator action: ${action}`)
+    state.emulatorMsg=result.detail||`Emulator ${action}: ${result.status}`
+    state.emulatorMsgLevel=result.status==='error'?'err':'info'
+  } catch(e) { state.emulatorMsg=e.message; state.emulatorMsgLevel='err' }
+  renderMain()
 }
 
 function liveTab(r) {
@@ -446,6 +497,7 @@ function tabContent(r) {
     case 'Components': return componentsTab(r)
     case 'Advanced': return advancedTab(r)
     case 'PKI': return pkiTab(r)
+    case 'Bluetooth': return bluetoothTab(r)
     case 'Chains': return chainsTab(r)
     case 'Medical': return medicalTab(r)
     case 'Toolchain': return toolchainTab(r)
@@ -992,6 +1044,7 @@ function wire() {
       startToolJob(`/api/tools/${encodeURIComponent(ta.dataset.tool)}/${ta.dataset.toolAction}`,`${ta.dataset.tool} ${ta.dataset.toolAction}`); return
     }
     const pa=e.target.closest('[data-pki-action]'); if (pa) { runPkiAction(pa.dataset.pkiAction); return }
+    const ea=e.target.closest('[data-emulator-action]'); if (ea) { runEmulatorAction(ea.dataset.emulatorAction); return }
     const d=e.target.closest('[data-diff]'); if (d) { const sel=$('#diffagainst'); if(sel) loadDiff(d.dataset.diff, sel.value); return }
     const mb=e.target.closest('[data-open-mobsf]'); if (mb) { openMobsf(mb.dataset.openMobsf); return }
     const t=e.target.closest('[data-tab]'); if (t) { state.tab=t.dataset.tab; renderMain(); return }

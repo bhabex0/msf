@@ -3,7 +3,7 @@ import { api, href } from '../api.js'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const TABS = [
-  'Findings', 'Components', 'Advanced', 'PKI', 'Chains', 'Medical', 'Toolchain', 'Lab',
+  'Findings', 'Components', 'Advanced', 'PKI', 'Bluetooth', 'Chains', 'Medical', 'Toolchain', 'Lab',
   'Live', 'Policy', 'Dynamic', 'Tools', 'Metadata', 'Report',
 ]
 
@@ -116,6 +116,7 @@ export default function ResultView({ record }) {
 
         {tab === 'Advanced' && <AdvancedPanel record={record} />}
         {tab === 'PKI' && <PkiPanel record={record} />}
+        {tab === 'Bluetooth' && <BluetoothPanel record={record} />}
         {tab === 'Chains' && <ChainsPanel record={record} />}
         {tab === 'Medical' && <MedicalPanel record={record} />}
         {tab === 'Toolchain' && <ToolchainPanel record={record} />}
@@ -491,6 +492,45 @@ function PkiPanel({ record }) {
   )
 }
 
+function BluetoothPanel({ record }) {
+  const b = record.bluetooth || {}
+  const s = b.summary || {}
+  const l = b.lab || {}
+  const rows = [
+    ['Status', b.status],
+    ['Permissions', (s.permissions || []).join(', ') || 'none observed'],
+    ['BLE APIs', (s.ble_tokens || []).join(', ') || 'none observed'],
+    ['Classic APIs', (s.classic_tokens || []).join(', ') || 'none observed'],
+    ['Pairing APIs', (s.pairing_tokens || []).join(', ') || 'none observed'],
+    ['UUID-like values', (s.uuids || []).join(', ') || 'none observed'],
+    ['Bluetooth findings', s.finding_count],
+  ]
+  const labRows = [
+    ['Lab enabled', String(l.enabled)],
+    ['Read only', String(l.read_only)],
+    ['Radio scan', String(l.device_scanning)],
+    ['Pairing / bonding', String(l.pairing_or_bonding)],
+    ...Object.entries(l.tools || {}).map(([k, v]) => [
+      k, v === null ? 'gated (APKPT_BLUETOOTH_LAB=0)' : v ? 'available' : 'not found',
+    ]),
+  ]
+  return (
+    <div className="metadata-grid">
+      <div className="meta-card">
+        <h3>Bluetooth / BLE evidence</h3>
+        <GenericTable headers={['Property', 'Value']} rows={rows} />
+        <p className="muted small">{b.notice}</p>
+        <p className="muted small"><strong>Not a malware/threat detection tool.</strong> Bluetooth observations are informational evidence only and never count as threat findings or release-gate failures.</p>
+      </div>
+      <div className="meta-card">
+        <h3>Local tooling (read-only)</h3>
+        <GenericTable headers={['Property', 'Value']} rows={labRows} />
+        <p className="muted small">{l.detail}</p>
+      </div>
+    </div>
+  )
+}
+
 function ChainsPanel({ record }) {
   const c = record.compliance || {}
   const coverage = [
@@ -586,10 +626,13 @@ function ToolchainPanel({ record }) {
 }
 
 function LabPanel({ record }) {
+  const [emulatorMessage, setEmulatorMessage] = useState('')
   const lab = record.emulator || {}
   const emu = lab.emulator || {}
   const proxy = lab.proxy || {}
   const patching = lab.patching || {}
+  const dast = record.dast_info || {}
+  const dastLab = dast.lab || {}
   const rows = [
     ['Authorization', lab.authorization],
     ['Proxy', proxy.configured ? `${proxy.type} @ ${proxy.endpoint}` : 'not configured'],
@@ -599,11 +642,51 @@ function LabPanel({ record }) {
     ['CA certificate', lab.ca_installation?.path || 'not configured'],
     ['Invasive allowed', emu.invasive_allowed],
   ]
+  const emulatorRows = [
+    ['Selected adb serial', dast.selected_serial || 'none'],
+    ['Emulator devices', (dastLab.emulator_devices || []).join(', ') || 'none'],
+    ['AVD', dastLab.avd || 'default'],
+    ['AVD created', String(dastLab.avd_created)],
+    ['Launch gated', String(dastLab.launch_gated)],
+    ['Plan steps', (dastLab.dast_plan || []).length],
+  ]
+  async function emulatorAction(action) {
+    try {
+      const headers = { 'Content-Type': 'application/json' }
+      const result = action === 'refresh'
+        ? await api('/api/lab/emulator')
+        : await api(`/api/lab/emulator/${action}`, {
+            method: 'POST', headers, body: JSON.stringify({ confirm: true }),
+          })
+      setEmulatorMessage(result.detail || `Emulator ${action}: ${result.status}`)
+    } catch (error) {
+      setEmulatorMessage(error.message)
+    }
+  }
   return (
     <div className="metadata-grid">
       <div className="meta-card">
         <h3>Interception lab</h3>
         <GenericTable headers={['Property', 'Value']} rows={rows} />
+      </div>
+      <div className="meta-card">
+        <h3>Emulator / DAST readiness</h3>
+        <GenericTable headers={['Property', 'Value']} rows={emulatorRows} />
+        <div className="toolbar">
+          <button onClick={() => emulatorAction('refresh')}>Refresh status</button>
+          <button className="primary" onClick={() => emulatorAction('launch')}>Launch local AVD</button>
+          <button onClick={() => emulatorAction('stop')}>Stop local AVD</button>
+        </div>
+        {emulatorMessage && <p className="muted small">{emulatorMessage}</p>}
+        <p className="muted small">Launch/stop require APKPT_EMULATOR_AUTO=1 and an explicit confirmed action. No emulator is ever launched automatically.</p>
+      </div>
+      <div className="meta-card">
+        <h3>Emulator DAST plan</h3>
+        <GenericTable
+          headers={['Step', 'Status', 'Command', 'Detail']}
+          rows={(dastLab.dast_plan || []).map((s) => [s.name, s.status, s.command, s.detail])}
+          empty="No emulator plan available for this scan."
+        />
       </div>
       <div className="meta-card">
         <h3>Generated commands</h3>

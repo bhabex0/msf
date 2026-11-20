@@ -21,7 +21,7 @@ class Finding(BaseModel):
     severity: Severity = "medium"
     category: Literal[
         "SAST", "SCA", "DAST", "TOOL", "ADVANCED", "CHAIN", "LIVE", "CUSTOM",
-        "SEMGREP", "MEDICAL", "PKI",
+        "SEMGREP", "MEDICAL", "PKI", "BLUETOOTH",
     ] = "SAST"
     confidence: Literal["high", "medium", "low"] = "medium"
     description: str = ""
@@ -117,6 +117,7 @@ class ScanRecord(BaseModel):
     manifest: ManifestSummary = Field(default_factory=ManifestSummary)
     certificate: dict[str, Any] = Field(default_factory=dict)
     pki: dict[str, Any] = Field(default_factory=dict)
+    bluetooth: dict[str, Any] = Field(default_factory=dict)
     apk_files: list[str] = Field(default_factory=list)
 
     findings: list[Finding] = Field(default_factory=list)

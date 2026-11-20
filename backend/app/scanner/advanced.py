@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .apk import ApkPackage, attr, find_all, parse_xml_document
-from .rules import PKI_FINGERPRINT_RE, excerpt, finding, is_benign_pki_string
+from .rules import BT_UUID_RE, PKI_FINGERPRINT_RE, excerpt, finding, is_benign_pki_string
 
 # ---------------------------------------------------------------- signatures
 TRACKER_SIGNATURES: list[tuple[str, str, tuple[str, ...]]] = [
@@ -390,7 +390,7 @@ def analyze_apkid(strings: list[str], names: list[str]) -> tuple[dict[str, Any],
 def analyze_entropy(strings: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     candidates: list[dict[str, Any]] = []
     for s in strings[:150_000]:
-        if is_benign_pki_string(s) or PKI_FINGERPRINT_RE.match(s.strip()):
+        if is_benign_pki_string(s) or PKI_FINGERPRINT_RE.match(s.strip()) or BT_UUID_RE.match(s.strip()):
             continue
         if not ENTROPY_ALPHABET_RE.match(s):
             continue

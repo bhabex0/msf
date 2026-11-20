@@ -3,20 +3,23 @@
 Usage:
     python tools/verify_all.py --iterations 100
 
-Each iteration parses the sample APK, runs SAST/SCA/custom/advanced/PKI/medical
-engines, probes the advanced toolchain and lab gates, checks the tool-manager
-catalog and install gates, checks DAST's no-device behaviour, evaluates policy
-gates, confirms external finding imports are unlimited, generates the HTML
-report, SBOM and SARIF exports, and diffs the record against a modified copy.
+Each iteration parses the sample APK, runs SAST/SCA/custom/advanced/PKI/
+Bluetooth/medical engines, probes the advanced toolchain and lab gates, checks
+the tool-manager catalog and install gates, checks emulator/DAST readiness and
+gated launch/stop, checks DAST's no-device behaviour, evaluates policy gates,
+confirms external finding imports are unlimited, generates the HTML report,
+SBOM and SARIF exports, and diffs the record against a modified copy.
 No network calls or device changes are made (OSV,
 live checks, tool hooks, tool installs, proxy changes, browser opening,
-local PKI lab writes and invasive workflows are disabled explicitly).
+local PKI lab writes, emulator launches and invasive workflows are disabled
+explicitly).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -30,14 +33,18 @@ from app import auth, config, pki_lab, tool_manager  # noqa: E402
 from app.models import Component, DastCheck, Finding, ManifestSummary, ScanRecord, ScaFinding  # noqa: E402
 from app.scanner.advanced import analyze_advanced  # noqa: E402
 from app.scanner.apk import ApkPackage, find_all  # noqa: E402
+from app.scanner.bluetooth import analyze_bluetooth, bluetooth_lab_status  # noqa: E402
 from app.scanner.custom import load_custom_rules, run_custom_rules  # noqa: E402
 from app.scanner.dast import DastResult, run_dast  # noqa: E402
 from app.scanner.exports import cyclonedx_sbom, diff_scans, sarif_report, save_exports  # noqa: E402
 from app.scanner.lab import (  # noqa: E402
+    adb_command,
     apply_proxy,
     emulator_status,
+    launch_emulator,
     open_mobsf_browser,
     run_patch_step,
+    stop_emulator,
 )
 from app.scanner.live import run_live_checks  # noqa: E402
 from app.scanner.medical import analyze_medical  # noqa: E402
@@ -75,10 +82,15 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         pki_ctx = SastContext(
             apk=apk, manifest=apk.manifest, summary=summary,
             network_config=network_config, app_node=app_node,
-            extra_strings=["keytool", "openssl", "apksigner", "a" * 64],
+            extra_strings=[
+                "keytool", "openssl", "apksigner", "a" * 64,
+                "bluetoothctl", "hcitool", "nrfutil",
+                "550e8400-e29b-41d4-a716-446655440000",
+            ],
         )
-        require(all(not pki_ctx.containing(token) for token in ("keytool", "openssl", "apksigner")),
-                f"iteration {index}: PKI tool strings reached suspicious-string heuristics", failures)
+        require(all(not pki_ctx.containing(token) for token in (
+            "keytool", "openssl", "apksigner", "bluetoothctl", "hcitool", "nrfutil",
+        )), f"iteration {index}: passive tool strings reached suspicious-string heuristics", failures)
         components, sca_findings, sca_meta = run_sca(strings, apk.names, online=False)
         custom = run_custom_rules(
             load_custom_rules(), strings=strings, summary=summary, apk_names=apk.names,
@@ -106,6 +118,7 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
             TOOL_MANAGER_ENABLED=False,
             PKI_LAB_ENABLED=False,
             PKI_DIR=work / "pki",
+            BLUETOOTH_LAB_ENABLED=False,
             TOOLS_ROOT=work / "tools",
             ANDROID_SDK_ROOT=work / "tools" / "android-sdk",
             INSTALLED_DB_PATH=work / "installed_tools.db",
@@ -121,6 +134,16 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
             probe = probe_toolchain()
             pki = analyze_pki(apk.certificate, network_config)
             pki_guard = pki_lab.generate_ca()
+            bluetooth = analyze_bluetooth(
+                summary,
+                strings + [
+                    "BluetoothLeScanner", "BluetoothGatt", "createBond",
+                    "550e8400-e29b-41d4-a716-446655440000",
+                ],
+            )
+            bt_status = bluetooth_lab_status()
+            emu_launch = launch_emulator(True)
+            emu_stop = stop_emulator(True)
 
             bulk_findings = _findings_from_payload(
                 {
@@ -171,10 +194,47 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
                 f"iteration {index}: PKI finding lacks non-malware disposition", failures)
         require("not a malware/threat detection engine" in pki["notice"],
                 f"iteration {index}: PKI notice lacks tooling disclaimer", failures)
-        require(all(is_benign_pki_string(s) for s in ("keytool", "openssl", "apksigner", "a" * 64)),
-                f"iteration {index}: benign PKI strings not recognised", failures)
+        require(all(is_benign_pki_string(s) for s in (
+            "keytool", "openssl", "apksigner", "a" * 64,
+            "bluetoothctl", "hcitool", "nrfutil", "550e8400-e29b-41d4-a716-446655440000",
+        )), f"iteration {index}: benign passive strings not recognised", failures)
+        require(bluetooth["summary"]["finding_count"] == len(bluetooth["findings"]),
+                f"iteration {index}: Bluetooth finding count mismatch", failures)
+        require(bool(bluetooth["findings"]),
+                f"iteration {index}: Bluetooth analysis produced no findings", failures)
+        require(all(f["severity"] == "info" and f["category"] == "BLUETOOTH"
+                    for f in bluetooth["findings"]),
+                f"iteration {index}: Bluetooth finding was treated as a threat", failures)
+        require(all("not a malware" in f["description"] for f in bluetooth["findings"]),
+                f"iteration {index}: Bluetooth finding lacks non-malware disposition", failures)
+        require("not a malware/threat detection engine" in bluetooth["notice"],
+                f"iteration {index}: Bluetooth notice lacks tooling disclaimer", failures)
+        require(bt_status["read_only"] is True and bt_status["device_scanning"] is False
+                and bt_status["pairing_or_bonding"] is False,
+                f"iteration {index}: Bluetooth lab status is not read-only", failures)
+        require(all(value is None for value in bt_status["tools"].values()),
+                f"iteration {index}: Bluetooth tooling was probed while gated off", failures)
+        require(emu_launch["status"] == "skipped" and emu_launch["performed"] is False,
+                f"iteration {index}: emulator launch was not gated", failures)
+        require(emu_stop["performed"] is False,
+                f"iteration {index}: emulator stop was not gated", failures)
         require(lab_status["emulator_auto"] is False and lab_status["invasive_allowed"] is False,
                 f"iteration {index}: lab automation gates not closed during verification", failures)
+        require(lab_status["launch_gated"] is True and "paths" in lab_status,
+                f"iteration {index}: emulator readiness/plan missing from lab status", failures)
+        require([step["name"] for step in lab_status["dast_plan"]] == [
+            "create_avd", "launch_avd", "verify_adb", "run_dast", "teardown",
+        ], f"iteration {index}: emulator DAST plan is incomplete", failures)
+        with tempfile.TemporaryDirectory() as adb_tmp:
+            sdk_adb_root = Path(adb_tmp) / "android-sdk"
+            sdk_adb = sdk_adb_root / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")
+            sdk_adb.parent.mkdir(parents=True)
+            sdk_adb.write_text("stub", encoding="utf-8")
+            with patch("app.scanner.lab.shutil.which", return_value=None), \
+                    patch.multiple(config, ADB_CMD="adb", ANDROID_SDK_ROOT=sdk_adb_root):
+                resolved_adb = adb_command()
+            require(resolved_adb == [str(sdk_adb)],
+                    f"iteration {index}: SDK platform-tools adb was not discovered", failures)
         require(len(probe) >= 16, f"iteration {index}: tool probe list too short", failures)
 
         manager_catalog = tool_manager.catalog()
@@ -191,6 +251,9 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
                 f"iteration {index}: manual tools are marked auto-installable", failures)
         require(all(name in manager_tools for name in ("keytool", "openssl", "apksigner")),
                 f"iteration {index}: PKI tool catalog entries missing", failures)
+        require(all(manager_tools[name]["manual"] and manager_tools[name]["actions"] == ["verify"]
+                    for name in ("bluetoothctl", "hcitool", "nrfutil")),
+                f"iteration {index}: Bluetooth catalog tools are not manual/verify-only", failures)
         require("pki" in manager_catalog and "device_installation" in manager_catalog["pki"],
                 f"iteration {index}: PKI lab status missing from catalog", failures)
         require(all("installable" in t and "install_block_reason" in t for t in manager_tools.values()),
@@ -265,6 +328,7 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
                 f"iteration {index}: grouped tool access missing from installed dashboard", failures)
 
         all_findings += pki["findings"]
+        all_findings += bluetooth["findings"]
         medical = analyze_medical(
             summary=summary,
             strings=strings,
@@ -298,6 +362,8 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
             require(expected in ids, f"iteration {index}: missing finding {expected}", failures)
         require(any(fid.startswith("PKI-") for fid in ids),
                 f"iteration {index}: PKI analysis produced no findings", failures)
+        require(any(fid.startswith("BT-") for fid in ids),
+                f"iteration {index}: Bluetooth analysis produced no findings", failures)
         require(bool(sca_findings), f"iteration {index}: SCA produced no findings", failures)
         require(sca_meta.get("online_lookup") is False, f"iteration {index}: online lookup not disabled", failures)
         require(any(c.get("name") == "WebView-to-Java RCE chain" for c in advanced.attack_chains),
@@ -325,6 +391,7 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         )
         record.certificate = apk.certificate
         record.pki = {k: v for k, v in pki.items() if k != "findings"}
+        record.bluetooth = {k: v for k, v in bluetooth.items() if k != "findings"}
         record.findings = [Finding.model_validate(f) for f in all_findings + dast.findings]
         record.components = [Component.model_validate(c) for c in components]
         record.sca_findings = [ScaFinding.model_validate(f) for f in sca_findings]
@@ -346,6 +413,11 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         with patch.object(config, "POLICY_MEDICAL_GAPS", 0):
             strict_policy = evaluate_policy(record)
 
+        require(record.policy["bluetooth_findings_excluded"] == len(bluetooth["findings"]),
+                f"iteration {index}: Bluetooth findings counted in release policy", failures)
+        require(record.policy["passive_findings_excluded"] == (
+            record.policy["pki_findings_excluded"] + record.policy["bluetooth_findings_excluded"]
+        ), f"iteration {index}: passive findings exclusion total is wrong", failures)
         require(record.policy["status"] == "fail", f"iteration {index}: vulnerable sample passed policy", failures)
         require(record.policy["medical_gate"]["enabled"] is False,
                 f"iteration {index}: medical gate should be disabled by default", failures)
@@ -358,6 +430,8 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
             "Advanced analysis", "Release policy gate", "Attack chains", "Deep links",
             "Medical / PHI analysis", "Advanced toolchain and interception lab",
             "PKI / certificate &amp; keystore",
+            "Bluetooth / BLE communication surface",
+            "No radio scan, pairing or device modification",
             "not a malware or threat detection engine",
             "For authorized security testing only",
         ):

@@ -139,13 +139,29 @@ Scan history is stored on disk, so previous reports remain available after a res
 - Catalog entries for `keytool`, `openssl` and `apksigner` expose official-source metadata and **Verify** actions. Manual JDK/OpenSSL tools are never falsely auto-installed; `apksigner` is installed only through the official Android SDK build-tools job
 - **PKI tooling is not a malware/threat detection engine.** Exact PKI tool and certificate artifact strings (`keytool`, `openssl`, `apksigner`, `keystore`, SHA-256 fingerprints, etc.) are filtered from suspicious-string and entropy heuristics so they are never reported as malware or threat indicators. Every PKI finding is labelled informational and carries an explicit non-accusatory disposition in the report and UI.
 
+**Bluetooth / BLE communication surface** (passive, informational only):
+
+- Passive evidence only: Bluetooth-related manifest permissions, BLE/GATT and classic RFCOMM API strings, pairing/bonding APIs, and UUID-shaped values extracted from the APK.
+- Emits informational `BLUETOOTH` findings with an explicit non-accusatory disposition. They are excluded from release-policy gates and from suspicious-string/entropy heuristics, exactly like PKI evidence.
+- Available in the HTML report, `GET /api/scans/{id}`, `GET /api/scans/{id}/bluetooth`, `GET /api/bluetooth/status`, and the static/React **Bluetooth** tabs.
+- Local `bluetoothctl`, `hcitool` and `nrfutil` availability is reported read-only. The platform **never performs a radio scan, pairing, bonding, or any device modification**. `APKPT_BLUETOOTH_LAB=1` only enables optional local tooling status (default `0`).
+- Catalog entries use official sources (BlueZ, Nordic Semiconductor) and are manual/verify-only; they are never falsely auto-installed.
+- **Bluetooth tooling is not a malware/threat detection engine.** Tool names and UUID-shaped values are filtered from threat heuristics so they cannot be reported as malware or threat indicators.
+
+**Emulator-backed DAST wiring** (all launches remain gated):
+
+- `GET /api/lab/emulator` reports read-only DAST readiness: adb availability, attached emulator/physical serials, selected target (`APKPT_DAST_SERIAL` wins; otherwise an emulator is preferred when `APKPT_DAST_PREFER_EMULATOR=1`), AVD presence and SDK paths.
+- `GET /api/lab/emulator/plan` returns a non-executing plan (create AVD → launch → verify adb → run DAST → teardown).
+- `POST /api/lab/emulator/launch` and `POST /api/lab/emulator/stop` require `confirm: true`, authentication when enabled, and `APKPT_EMULATOR_AUTO=1`. With the default gate off they return `skipped`. No emulator is ever launched automatically by a scan.
+- DAST records now include `emulator_target` and `dast_info.lab` with the readiness and plan, visible in the static/React **Lab** tabs.
+
 **Tool manager and emulator setup** (explicit dashboard action, disabled by default):
 
 - Open **Tools & emulator manager** in the sidebar. Jobs never start from a scan or from page load.
 - Set `APKPT_TOOL_MANAGER=1` and restart the server to enable job execution. With the default `0`, actions return `skipped` and explain how to enable them.
 - **Install / update all** processes every auto-installable tool sequentially; **Update all** refreshes installed tools; **Verify all sources** performs allowlisted reachability checks only.
 - Per-tool **Install**, **Update**, **Pull** and **Verify** buttons let you manage one tool at a time. `Pull`/`Update` for Git-backed tools runs `git pull --ff-only` when `git` is installed; otherwise the manager downloads a pinned GitHub source snapshot through the API.
-- **Install emulator** downloads official Android cmdline-tools and platform-tools, accepts SDK licenses, installs platform 34/build-tools/emulator, and creates a local AVD. It does not launch or modify a device.
+- **Install emulator** downloads official Android cmdline-tools and platform-tools, accepts SDK licenses, installs platform 34/build-tools/emulator, and creates a local AVD. It does not launch or modify a device. `adb` is auto-discovered from `ANDROID_SDK_ROOT/platform-tools` when it is not on PATH, so DAST and readiness checks work after setup without manual PATH edits; `APKPT_ADB_CMD` still takes precedence.
 - Every job has a persistent ID, status, progress, timestamp and log. The final status/detail now reflect the tool result (`completed`, `skipped` with the exact reason, or `failed`) instead of a generic “Job finished” message. Poll `GET /api/tools/jobs/{id}` or stream `GET /api/tools/jobs/{id}/events`.
 - Once the manager is enabled, obsolete `Tool manager is disabled` records are moved from the active job list into `backend/storage/tools/jobs/archive/<timestamp>/` so they cannot hide real jobs; the audit logs remain on disk.
 - Downloads are restricted to official HTTPS hosts by default (`api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com`, `raw.githubusercontent.com`, `dl.google.com`, `developer.android.com`, `docs.oracle.com`, `docs.openssl.org`, `www.openssl.org`, `pypi.org`, `files.pythonhosted.org`, `zaproxy.org`, `portswigger.net`, `www.chromium.org`). Administrators can narrow this list with `APKPT_TOOL_ALLOWED_HOSTS`. Redirects to other hosts are rejected. GitHub release assets are SHA-256 verified from the release API.
@@ -170,7 +186,7 @@ Scan history is stored on disk, so previous reports remain available after a res
 | `aapt` / `aapt2` | Capture package badging metadata | Install on PATH; detected automatically |
 | `semgrep` | Rule-based scan of jadx-generated Java source | Install on PATH; requires jadx source |
 | `MobSF` | Full MobSF static scan merged into findings | `APKPT_MOBSF_URL=http://127.0.0.1:8000`, `APKPT_MOBSF_API_KEY=...` |
-| `adb` | Required for DAST | Install Android SDK platform-tools on PATH |
+| `adb` | Required for DAST | On PATH, or auto-discovered from `ANDROID_SDK_ROOT/platform-tools` after emulator setup |
 | `frida` | Runtime hooking | `pip install frida-tools`, set `APKPT_DAST_FRIDA=1` |
 | Emulator | DAST target | Start an Android emulator with USB debugging |
 

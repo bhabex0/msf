@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import config
-from .lab import emulator_status, proxy_config
+from .lab import adb_command, emulator_status, proxy_config
 from .rules import excerpt, finding
 
 SENSITIVE_LOG_RE = re.compile(r"(password|passwd|token|secret|api[_-]?key|authorization|credit card)", re.I)
@@ -76,18 +76,18 @@ class DastResult:
         self.checks.append({"name": name, "status": status, "detail": detail, "evidence": evidence[:2000]})
 
 
-def _adb_cmd(*args: str) -> list[str]:
-    parts = shlex.split(config.ADB_CMD) if os.name != "nt" else shlex.split(config.ADB_CMD, posix=False)
-    cmd = parts or ["adb"]
-    if config.DAST_DEVICE_SERIAL:
-        cmd += ["-s", config.DAST_DEVICE_SERIAL]
+def _adb_cmd(*args: str, serial: str | None = None) -> list[str]:
+    cmd = adb_command()
+    target = serial or config.DAST_DEVICE_SERIAL
+    if target:
+        cmd += ["-s", target]
     return cmd + list(args)
 
 
-def _adb(*args: str, timeout: int = 60) -> tuple[int, str]:
+def _adb(*args: str, timeout: int = 60, serial: str | None = None) -> tuple[int, str]:
     try:
         proc = subprocess.run(
-            _adb_cmd(*args),
+            _adb_cmd(*args, serial=serial),
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -190,13 +190,14 @@ def run_dast(
         result.check("engine", "skipped", "DAST disabled via APKPT_ENABLE_DAST=0")
         return result
 
-    adb_parts = shlex.split(config.ADB_CMD) if os.name != "nt" else shlex.split(config.ADB_CMD, posix=False)
-    if not (shutil.which(adb_parts[0] if adb_parts else "adb") or (adb_parts and Path(adb_parts[0]).exists())):
+    adb_parts = adb_command()
+    if not (shutil.which(adb_parts[0]) or Path(adb_parts[0]).exists()):
         result.status = "skipped"
         result.check(
             "adb_availability",
             "skipped",
-            "adb was not found in PATH. Install Android SDK platform-tools and add it to PATH.",
+            "adb was not found in PATH or under ANDROID_SDK_ROOT/platform-tools. "
+            "Install Android SDK platform-tools and add it to PATH.",
         )
         return result
 
@@ -210,6 +211,18 @@ def run_dast(
         )
         return result
     result.info["devices"] = devices
+
+    # Select an attached emulator when preferred; an explicit serial always wins.
+    emulator_devices = [d for d in devices if d.startswith("emulator-")]
+    selected_serial = config.DAST_DEVICE_SERIAL or ""
+    if not selected_serial and config.DAST_PREFER_EMULATOR and emulator_devices:
+        selected_serial = emulator_devices[0]
+    if not selected_serial:
+        selected_serial = devices[0]
+    result.info["selected_serial"] = selected_serial
+
+    def adb(*args: str, timeout: int = 60) -> tuple[int, str]:
+        return _adb(*args, timeout=timeout, serial=selected_serial)
 
     package = summary.get("package")
     if not package:
@@ -225,7 +238,20 @@ def run_dast(
         "emulator_available": lab["emulator_available"],
         "emulator_auto": lab["emulator_auto"],
         "invasive_allowed": lab["invasive_allowed"],
+        "emulator_devices": lab["emulator_devices"],
+        "physical_devices": lab["physical_devices"],
+        "avd": lab["avd"],
+        "avd_created": lab["paths"]["avd_created"],
+        "launch_gated": lab["launch_gated"],
+        "dast_plan": lab["dast_plan"],
     }
+    result.check(
+        "emulator_target", "passed" if emulator_devices else "skipped",
+        f"Using adb serial {selected_serial}"
+        + (" (emulator)" if selected_serial in emulator_devices else " (physical device)")
+        + (f"; {len(emulator_devices)} emulator(s) attached" if emulator_devices else
+           "; no emulator attached — launch the local AVD via /api/lab/emulator/launch"),
+    )
     if proxy["configured"]:
         tool_commands = {
             "burp": config.BURP_CMD,
@@ -255,12 +281,12 @@ def run_dast(
     elif nsc:
         result.check("nsc_interception", "passed", "Declared NSC permits user CA trust for interception.")
 
-    code, out = _adb("shell", "getprop", "ro.build.version.release", timeout=20)
+    code, out = adb("shell", "getprop", "ro.build.version.release", timeout=20)
     result.info["android_version"] = out if code == 0 else "unknown"
-    code, out = _adb("shell", "getprop", "ro.product.model", timeout=20)
+    code, out = adb("shell", "getprop", "ro.product.model", timeout=20)
     result.info["device_model"] = out if code == 0 else "unknown"
 
-    code, install_log = _adb("install", "-r", "-t", str(apk_path), timeout=180)
+    code, install_log = adb("install", "-r", "-t", str(apk_path), timeout=180)
     if code != 0:
         result.status = "error"
         result.check("install", "failed", f"adb install failed (exit {code})", install_log)
@@ -269,8 +295,8 @@ def run_dast(
 
     original_proxy = ""
     if proxy["configured"]:
-        code, original_proxy = _adb("shell", "settings", "get", "global", "http_proxy", timeout=20)
-        _adb("shell", "settings", "put", "global", "http_proxy", proxy["endpoint"], timeout=20)
+        code, original_proxy = adb("shell", "settings", "get", "global", "http_proxy", timeout=20)
+        adb("shell", "settings", "put", "global", "http_proxy", proxy["endpoint"], timeout=20)
         result.check(
             "proxy", "passed",
             f"HTTP proxy set to {proxy['endpoint']} ({proxy['type']}); capture traffic in your authorized proxy",
@@ -280,7 +306,7 @@ def run_dast(
 
     if config.CA_CERT_PATH and Path(config.CA_CERT_PATH).exists():
         if config.EMULATOR_AUTO and config.ALLOW_INVASIVE:
-            code, ca_log = _adb("push", config.CA_CERT_PATH, "/data/local/tmp/apkpt-proxy-ca.crt", timeout=30)
+            code, ca_log = adb("push", config.CA_CERT_PATH, "/data/local/tmp/apkpt-proxy-ca.crt", timeout=30)
             result.check(
                 "proxy_ca", "passed" if code == 0 else "error",
                 "CA copied to test device; install into the test trust store per the Lab plan"
@@ -298,20 +324,20 @@ def run_dast(
         )
 
     activity = _launcher_activity(summary)
-    _adb("logcat", "-c", timeout=20)
+    adb("logcat", "-c", timeout=20)
     if activity:
         launch = _component_target(package, activity)
-        code, launch_log = _adb("shell", "am", "start", "-n", launch, timeout=40)
+        code, launch_log = adb("shell", "am", "start", "-n", launch, timeout=40)
         result.check("launch", "passed" if code == 0 else "error", launch_log[:500], launch_log)
     else:
-        code, launch_log = _adb(
+        code, launch_log = adb(
             "shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1", timeout=40
         )
         result.check("launch", "passed" if code == 0 else "error", "launched via monkey", launch_log)
 
     time.sleep(max(2, config.DAST_LAUNCH_WAIT_SECONDS))
 
-    _, logcat = _adb("logcat", "-d", "-v", "threadtime", timeout=60)
+    _, logcat = adb("logcat", "-d", "-v", "threadtime", timeout=60)
     result.info["logcat_excerpt"] = logcat[-6000:]
     result.check("logcat_capture", "passed" if logcat else "error", f"captured {len(logcat)} bytes")
 
@@ -370,10 +396,10 @@ def run_dast(
 
     deep_links = _deep_link_targets(summary)
     for activity_name, uri in deep_links:
-        _adb("logcat", "-c", timeout=20)
-        code, out = _adb("shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", uri,
+        adb("logcat", "-c", timeout=20)
+        code, out = adb("shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", uri,
                          component_target(activity_name), timeout=40)
-        _, dlog = _adb("logcat", "-d", "-v", "threadtime", timeout=40)
+        _, dlog = adb("logcat", "-d", "-v", "threadtime", timeout=40)
         crashed = bool(re.search(r"FATAL EXCEPTION|AndroidRuntime.*Exception", dlog, re.I))
         result.check("deep_link", "failed" if crashed else "passed" if code == 0 else "error",
                      f"{uri} -> exit {code}" + (" (crash)" if crashed else ""), (out + "\n" + dlog)[:1200])
@@ -393,15 +419,15 @@ def run_dast(
 
     fuzz_targets = _fuzz_targets(summary)
     for kind, comp_name, permission in fuzz_targets:
-        _adb("logcat", "-c", timeout=20)
+        adb("logcat", "-c", timeout=20)
         payload = "A" * 4096
         args = ["shell", "am", "start", "-n", component_target(comp_name), "--es", "APKPT_FUZZ", payload]
         if kind == "service":
             args[2] = "startservice"
         elif kind == "receiver":
             args[2] = "broadcast"
-        code, out = _adb(*args, timeout=40)
-        _, flog = _adb("logcat", "-d", "-v", "threadtime", timeout=40)
+        code, out = adb(*args, timeout=40)
+        _, flog = adb("logcat", "-d", "-v", "threadtime", timeout=40)
         crashed = bool(re.search(r"FATAL EXCEPTION|AndroidRuntime.*Exception", flog, re.I))
         result.check("intent_fuzz", "failed" if crashed else "passed" if code == 0 else "error",
                      f"{kind} {comp_name} permission={permission or 'none'} exit {code}" + (" (crash)" if crashed else ""),
@@ -420,7 +446,7 @@ def run_dast(
                 confidence="high",
             ))
 
-    _, dumpsys = _adb("shell", "dumpsys", "package", package, timeout=60)
+    _, dumpsys = adb("shell", "dumpsys", "package", package, timeout=60)
     result.info["dumpsys_excerpt"] = dumpsys[:6000]
     if "DEBUGGABLE" in dumpsys.upper():
         result.findings.append(
@@ -438,7 +464,7 @@ def run_dast(
                 confidence="high",
             )
         )
-        code, run_as = _adb("shell", "run-as", package, "ls", "-la", timeout=30)
+        code, run_as = adb("shell", "run-as", package, "ls", "-la", timeout=30)
         if code == 0:
             result.findings.append(
                 finding(
@@ -483,10 +509,10 @@ def run_dast(
 
     try:
         remote = "/sdcard/apkpt_screen.png"
-        code, _ = _adb("shell", "screencap", "-p", remote, timeout=30)
+        code, _ = adb("shell", "screencap", "-p", remote, timeout=30)
         if code == 0:
             local = work_dir / "screenshot.png"
-            code, _ = _adb("pull", remote, str(local), timeout=30)
+            code, _ = adb("pull", remote, str(local), timeout=30)
             if code == 0 and local.exists():
                 result.info["screenshot"] = str(local)
                 result.check("screenshot", "passed", "captured runtime screenshot")
@@ -495,12 +521,12 @@ def run_dast(
 
     if proxy["configured"]:
         if original_proxy and original_proxy.lower() not in ("", "null", "none"):
-            _adb("shell", "settings", "put", "global", "http_proxy", original_proxy.strip(), timeout=20)
+            adb("shell", "settings", "put", "global", "http_proxy", original_proxy.strip(), timeout=20)
         else:
-            _adb("shell", "settings", "delete", "global", "http_proxy", timeout=20)
+            adb("shell", "settings", "delete", "global", "http_proxy", timeout=20)
 
     if config.DAST_UNINSTALL_AFTER:
-        _adb("uninstall", package, timeout=90)
+        adb("uninstall", package, timeout=90)
         result.check("cleanup", "passed", "test app uninstalled from device")
 
     result.status = "completed"

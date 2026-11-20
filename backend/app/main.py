@@ -17,12 +17,16 @@ from pydantic import BaseModel
 from . import __version__, auth, config, pki_lab, storage, tool_manager
 from .scanner.custom import add_custom_rule, delete_custom_rule, load_custom_rules
 from .scanner.exports import cyclonedx_sbom, diff_scans, sarif_report
+from .scanner.bluetooth import bluetooth_lab_status
 from .scanner.lab import (
     apply_proxy,
+    build_emulator_dast_plan,
     build_lab_plan,
     emulator_status,
+    launch_emulator,
     open_mobsf_browser,
     run_patch_step,
+    stop_emulator,
 )
 from .scanner.pipeline import run_scan
 from .scanner.tools import probe_tools
@@ -102,6 +106,10 @@ class PkiKeystoreGenerateRequest(BaseModel):
     confirm: bool = True
 
 
+class EmulatorActionRequest(BaseModel):
+    confirm: bool = False
+
+
 def _download(data: dict[str, Any], filename: str) -> JSONResponse:
     return JSONResponse(
         data,
@@ -131,6 +139,7 @@ def health() -> dict:
             "live_checks": config.ENABLE_LIVE_CHECKS,
             "medical": config.ENABLE_MEDICAL,
             "pki": True,
+            "bluetooth": True,
             "toolchain": config.TOOLCHAIN_AUTO,
             "tool_manager": config.TOOL_MANAGER_ENABLED,
             "auth": config.AUTH_ENABLED,
@@ -406,6 +415,49 @@ def lab_status() -> dict:
     return emulator_status()
 
 
+@app.get("/api/lab/emulator")
+def emulator_dast_status() -> dict:
+    """Read-only emulator/DAST readiness. Never launches or modifies a device."""
+    return emulator_status()
+
+
+@app.get("/api/lab/emulator/plan")
+def emulator_dast_plan() -> dict:
+    """Non-executing guided plan for emulator-backed DAST."""
+    return {
+        "authorization": "For authorized security testing only.",
+        "steps": build_emulator_dast_plan(),
+    }
+
+
+@app.post("/api/lab/emulator/launch")
+def emulator_launch(
+    payload: EmulatorActionRequest | None = Body(None),
+    actor: str = Depends(auth.require_auth),
+) -> dict:
+    confirm = bool(payload and payload.confirm)
+    result = launch_emulator(confirm)
+    auth.audit("lab.emulator_launch", {"status": result.get("status"), "performed": result.get("performed")}, actor)
+    return result
+
+
+@app.post("/api/lab/emulator/stop")
+def emulator_stop(
+    payload: EmulatorActionRequest | None = Body(None),
+    actor: str = Depends(auth.require_auth),
+) -> dict:
+    confirm = bool(payload and payload.confirm)
+    result = stop_emulator(confirm)
+    auth.audit("lab.emulator_stop", {"status": result.get("status"), "performed": result.get("performed")}, actor)
+    return result
+
+
+@app.get("/api/bluetooth/status")
+def bluetooth_status() -> dict:
+    """Read-only local Bluetooth tooling status. Never scans or pairs."""
+    return bluetooth_lab_status()
+
+
 @app.post("/api/lab/proxy")
 def lab_proxy(payload: ProxyRequest, actor: str = Depends(auth.require_auth)) -> dict:
     result = apply_proxy(
@@ -598,6 +650,11 @@ def get_pki(scan_id: str) -> dict:
     return _get_record(scan_id).pki
 
 
+@app.get("/api/scans/{scan_id}/bluetooth")
+def get_bluetooth(scan_id: str) -> dict:
+    return _get_record(scan_id).bluetooth
+
+
 @app.get("/api/scans/{scan_id}/toolchain")
 def get_toolchain(scan_id: str) -> list[dict]:
     return _get_record(scan_id).toolchain
@@ -701,12 +758,13 @@ def installed_dashboard() -> HTMLResponse:
     return HTMLResponse(tool_manager.installed_dashboard_html())
 
 
-# Serve the built React app when available, otherwise the zero-dependency
-# static dashboard. Both are mounted after the API routes so /api/* wins.
+# The zero-dependency static dashboard is the active UI by default. The React
+# build is maintained and built, and is served only with APKPT_WEB_UI=react.
+# Both are mounted after the API routes so /api/* wins.
 _project_root = Path(__file__).resolve().parent.parent.parent
 _dist = _project_root / "frontend" / "dist"
 _static = _project_root / "frontend" / "static"
-_web = _dist if _dist.exists() else _static
+_web = _dist if config.WEB_UI == "react" and _dist.exists() else _static
 if _web.exists():
     app.mount("/", StaticFiles(directory=str(_web), html=True), name="frontend")
     log.info("serving frontend from %s", _web)
