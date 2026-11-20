@@ -1175,6 +1175,7 @@ table{{font-size:11.5px}}th,td{{padding:7px 10px}}th{{font-family:var(--mono);fo
 <div class="muted small">SQLite: <span class="mono">{e(str(installed_db.db_path()))}</span> · {len(records)} recorded tool(s)</div></div>
 <div><a class="btn" href="/">← Platform dashboard</a> <button class="btn primary" type="button" onclick="syncDb()">Sync catalog</button> <button class="btn" type="button" onclick="openWeb('mobsf')">Open MobSF</button> <button class="btn" type="button" onclick="openAllWeb()">Open all web UIs</button></div></div>
 <div id="message" class="banner" style="display:none"></div>
+<div id="web-results" class="card" style="display:none;margin-top:12px"></div>
 <div class="auto-term" id="auto-term" role="region" aria-label="Live tool job terminal" aria-live="polite">
   <div class="at-head">
     <span><span class="at-dot" aria-hidden="true"></span><strong id="at-title">tool job</strong> <span class="muted small" id="at-status">running</span></span>
@@ -1297,12 +1298,32 @@ async function openWeb(id) {{
     show((r.status || 'done') + ': ' + install + (r.detail || r.url || 'ok'), false, lvl);
   }} catch (e) {{ show(e.message, true); }}
 }}
+function escHtml(value) {{
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {{
+    return {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[ch];
+  }});
+}}
+function renderWebResults(items) {{
+  const el = document.getElementById('web-results');
+  const rows = (Array.isArray(items) ? items : []).map(function(r) {{
+    const status = r.status || 'skipped';
+    const url = r.url ? '<a href="' + escHtml(r.url) + '" target="_blank" rel="noreferrer">' + escHtml(r.url) + '</a>' : '—';
+    return '<tr><td><strong>' + escHtml(r.name || r.tool || 'tool') + '</strong><div class="small muted">' + escHtml(r.tool || '') + '</div></td>'
+      + '<td><span class="pill ' + escHtml(status) + '">' + escHtml(status) + '</span></td>'
+      + '<td>' + escHtml(r.detail || '') + '</td><td class="small">' + url + '</td></tr>';
+  }}).join('');
+  if (!rows) {{ el.style.display = 'none'; el.innerHTML = ''; return; }}
+  el.innerHTML = '<h3>Open all web UIs — per-tool results</h3><div class="tw"><table><thead><tr><th>Tool</th><th>Status</th><th>Detail</th><th>Configured URL</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  el.style.display = 'block';
+}}
 async function openAllWeb() {{
   try {{
     const r = await post('/api/tools/web/all');
     const lvl = r.status === 'error' ? 'critical' : r.status === 'skipped' ? 'low' : 'ok';
     show('Open all web UIs: ' + (r.detail || 'done'), false, lvl);
-  }} catch (e) {{ show(e.message, true); }}
+    // Per-tool skipped rows and missing-configuration details stay visible.
+    renderWebResults(r.results);
+  }} catch (e) {{ show(e.message, true); renderWebResults([]); }}
 }}
 async function syncDb() {{
   try {{ const r = await post('/api/tools/installed/sync'); show('Inventory synced: ' + (r.added || 0) + ' new record(s).', false); setTimeout(() => location.reload(), 400); }}

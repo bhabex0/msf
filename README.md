@@ -184,10 +184,10 @@ Scan history is stored on disk, so previous reports remain available after a res
 - `POST /api/lab/emulator/launch` and `POST /api/lab/emulator/stop` require `confirm: true`, authentication when enabled, and `APKPT_EMULATOR_AUTO=1`. With the default gate off they return `skipped`. No emulator is ever launched automatically by a scan.
 - DAST records now include `emulator_target` and `dast_info.lab` with the readiness and plan, visible in the static/React **Lab** tabs.
 
-**Tool manager and emulator setup** (explicit dashboard action, disabled by default):
+**Tool manager and emulator setup** (explicit dashboard action, enabled by default):
 
 - Open **Tools & emulator manager** in the sidebar. Jobs never start from a scan or from page load.
-- Set `APKPT_TOOL_MANAGER=1` and restart the server to enable job execution. With the default `0`, actions return `skipped` and explain how to enable them.
+- `APKPT_TOOL_MANAGER=1` is the default. Set it to `0` and restart the server to disable job execution; disabled actions return `skipped` and explain how to re-enable them.
 - **Install / update all** processes every auto-installable tool sequentially; **Update all** refreshes installed tools; **Verify all sources** performs allowlisted reachability checks only.
 - Per-tool **Install**, **Update**, **Pull** and **Verify** buttons let you manage one tool at a time. `Pull`/`Update` for Git-backed tools runs `git pull --ff-only` when `git` is installed; otherwise the manager downloads a pinned GitHub source snapshot through the API.
 - **Install emulator** downloads official Android cmdline-tools and platform-tools, accepts SDK licenses, installs platform 34/build-tools/emulator, creates a local AVD, and then installs the host-side DAST toolchain. It does not launch or modify a device. The detected Java runtime is exported as `JAVA_HOME` and prepended to `PATH` for `sdkmanager`/`avdmanager` child processes, so setup works even when the server was started without Java on its own PATH; `APKPT_JAVA_CMD` still takes precedence. `adb` is auto-discovered from `ANDROID_SDK_ROOT/platform-tools` when it is not on PATH, so DAST and readiness checks work after setup without manual PATH edits; `APKPT_ADB_CMD` still takes precedence.
@@ -487,7 +487,7 @@ python tools/http_smoke.py http://127.0.0.1:8123 sample-vulnerable.apk
 - Medical/PHI detection is keyword- and pattern-based. Masked indicators are review leads; they do not establish that real ePHI is present, and standards mappings are not legal or regulatory certification.
 - HTTPS interception on Android 7+ requires a trusted user CA or a test-only Network Security Configuration; Android 14+ system-store changes generally require a rooted, authorized test device. The lab reports these constraints rather than bypassing them.
 - Rooting, APatch, Frida/objection injection, smali patching, modding and translation can damage a device or invalidate an app signature. They are planned only until explicitly enabled and authenticated.
-- Tool-manager jobs are disabled by default. Enabling `APKPT_TOOL_MANAGER=1` permits local downloads, pip installs, Git pulls and SDK installs only after an explicit authenticated action; manual/licensed tools are never auto-installed.
+- Tool-manager jobs are enabled by default (`APKPT_TOOL_MANAGER=1`) but still require an explicit dashboard action; `APKPT_TOOL_MANAGER=0` disables them. Local downloads, pip installs, Git pulls and SDK installs never start from page load or a scan; manual/licensed tools are never auto-installed.
 - Android emulator setup requires a Java runtime, significant disk space and hardware acceleration. It creates a local AVD but does not launch it or accept licenses on a device.
 - The React build requires Node/npm. The static dashboard is the active UI when `frontend/dist` is absent.
 - This tool does not replace a manual assessment by a qualified pentester.

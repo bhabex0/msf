@@ -214,7 +214,7 @@ JAVA_CMD = os.getenv("APKPT_JAVA_CMD", "").strip()
 # ---------------------------------------------------------------- tool manager
 # Downloads/installs never start automatically. Each dashboard action creates
 # an explicit job; manual/licensed tools are reported rather than downloaded.
-TOOL_MANAGER_ENABLED = os.getenv("APKPT_TOOL_MANAGER", "0") == "1"
+TOOL_MANAGER_ENABLED = os.getenv("APKPT_TOOL_MANAGER", "1") == "1"
 TOOLS_ROOT = Path(os.getenv("APKPT_TOOLS_DIR", str(STORAGE_DIR / "tools")))
 ANDROID_SDK_ROOT = Path(os.getenv("APKPT_ANDROID_SDK_ROOT", str(TOOLS_ROOT / "android-sdk")))
 EMULATOR_SYSTEM_IMAGE = os.getenv("APKPT_EMULATOR_SYSTEM_IMAGE", "").strip()
@@ -278,8 +278,9 @@ MOBSF_DYNAMIC_PORT = (
     _configured_web_port("APKPT_MOBSF_DYNAMIC_PORT", "mobsf_dynamic", allow_auto=False)
     or MOBSF_PORT
 )
-# Explicit endpoint action only: open an authorised MobSF UI in Chromium.
-BROWSER_OPEN_ENABLED = os.getenv("APKPT_BROWSER_OPEN", "0") == "1"
+# Explicit endpoint action only: open an authorised tool UI in the system
+# browser. This default does not auto-open anything at startup or on scan.
+BROWSER_OPEN_ENABLED = os.getenv("APKPT_BROWSER_OPEN", "1") == "1"
 
 # The zero-dependency static dashboard is the active UI. The React source is
 # maintained and built, and can be served explicitly with APKPT_WEB_UI=react.

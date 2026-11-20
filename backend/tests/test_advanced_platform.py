@@ -709,7 +709,9 @@ class AdvancedFeatureTests(unittest.TestCase):
     def test_tool_manager_catalog_sources_and_gates(self):
         data = tool_manager.catalog()
         tools = {t["id"]: t for t in data["tools"]}
-        self.assertFalse(data["enabled"])
+        # Safe-by-default now means the manager is available, but every job
+        # still requires an explicit confirmed dashboard/API action.
+        self.assertTrue(data["enabled"])
         self.assertGreaterEqual(len(tools), 20)
         for expected in (
             "apktool", "jadx", "platform-tools", "cmdline-tools", "aapt2",

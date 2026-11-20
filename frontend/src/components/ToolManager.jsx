@@ -11,6 +11,7 @@ export default function ToolManager() {
   const [installed, setInstalled] = useState([])
   const [message, setMessage] = useState('')
   const [messageLevel, setMessageLevel] = useState('info')
+  const [webResults, setWebResults] = useState([])
   const jobsRef = useRef([])
 
   const load = useCallback(async () => {
@@ -122,6 +123,9 @@ export default function ToolManager() {
         body: JSON.stringify({ confirm: true }),
       })
       await load()
+      // Keep every per-tool outcome visible, including skipped rows and the
+      // exact missing-configuration detail returned by the API.
+      setWebResults(Array.isArray(result.results) ? result.results : [])
       const parts = [`all web UIs: ${result.status || 'done'}`]
       if (result.detail) parts.push(result.detail)
       if (result.note) parts.push(result.note)
@@ -177,6 +181,26 @@ export default function ToolManager() {
           : 'Disabled — set APKPT_TOOL_MANAGER=1 and restart the server to run jobs.'}
       </div>
       {message && <div className={bannerClass(messageLevel)}>{message}</div>}
+      {webResults.length > 0 && (
+        <div className="tool-access" style={{ marginBottom: 18 }}>
+          <h3>Open all web UIs — per-tool results</h3>
+          <div className="tw">
+            <table>
+              <thead><tr><th>Tool</th><th>Status</th><th>Detail</th><th>Configured URL</th></tr></thead>
+              <tbody>
+                {webResults.map((item, index) => (
+                  <tr key={`${item.tool || item.name}-${index}`}>
+                    <td><strong>{item.name || item.tool || 'tool'}</strong><div className="small muted">{item.tool || ''}</div></td>
+                    <td><span className={`pill ${item.status || 'skipped'}`}>{item.status || 'skipped'}</span></td>
+                    <td>{item.detail || ''}</td>
+                    <td className="small">{item.url ? <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a> : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
         <button className="btn primary" onClick={() => start('/api/tools/install-all', 'install all')}>Install / update all</button>
         <button className="btn" onClick={() => start('/api/tools/update-all', 'update all')}>Update all</button>

@@ -238,8 +238,10 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
 
         manager_catalog = tool_manager.catalog()
         manager_tools = {t["id"]: t for t in manager_catalog["tools"]}
-        require(manager_catalog["enabled"] is False,
-                f"iteration {index}: tool manager was enabled during verification", failures)
+        # The manager is available by default, but all jobs remain explicit
+        # confirmed actions; the gated calls above verify that behavior.
+        require(manager_catalog["enabled"] is True,
+                f"iteration {index}: tool manager default is not enabled", failures)
         require(len(manager_tools) >= 20,
                 f"iteration {index}: tool-manager catalog incomplete", failures)
         require(all(tool_manager.safe_url(t["source_url"]) for t in manager_tools.values()),
