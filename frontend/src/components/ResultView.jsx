@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { api, href } from '../api.js'
+import SequenceRail from './SequenceRail.jsx'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const TABS = [
@@ -48,6 +49,8 @@ export default function ResultView({ record }) {
         </div>
       </div>
 
+      <SequenceRail record={record} />
+
       <div className="stats">
         {SEVERITIES.map((sev) => (
           <div key={sev} className={`stat ${sev}`}>
@@ -61,6 +64,7 @@ export default function ResultView({ record }) {
         </div>
       </div>
 
+      <div className="sec-head"><span className="idx">02</span> Report sections <span className="muted small">{TABS.length} views</span></div>
       <div className="tabs">
         {TABS.map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>

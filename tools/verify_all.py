@@ -515,6 +515,17 @@ def main() -> int:
         return 2
 
     failures: list[str] = []
+    static_ui = (ROOT / "frontend" / "static" / "index.html").read_text(encoding="utf-8")
+    react_css = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
+    react_shell = (ROOT / "frontend" / "src" / "components" / "MiniShell.jsx").read_text(encoding="utf-8")
+    react_sequence = (ROOT / "frontend" / "src" / "components" / "SequenceRail.jsx").read_text(encoding="utf-8")
+    require(all(token in static_ui for token in ("seq-rail", "sec-head", "backdrop-filter", "pointerdown", "click outside hides")),
+            "static UI is missing the cyber glass sequence or shell behaviour", failures)
+    require(all(token in react_css for token in ("--glass", ".seq-rail", "counter-reset: tabno", "@supports not")),
+            "React UI is missing the cyber glass tokens or numbered tabs", failures)
+    require(all(token in react_shell for token in ("pointerdown", "shellRootRef", "click outside hides"))
+            and "seq-step" in react_sequence,
+            "React shell auto-hide or sequence rail is missing", failures)
     with tempfile.TemporaryDirectory(prefix="apkpt-verify-") as tmp:
         work = Path(tmp)
         for i in range(1, args.iterations + 1):

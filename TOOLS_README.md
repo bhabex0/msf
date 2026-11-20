@@ -194,6 +194,12 @@ The auto mode triggers only when the platform port matches `APKPT_TOOL_WEB_AUTO_
 
 When a web URL is configured, each tool card also shows **Open URL**, a direct browser link to that tool (MobSF, RMS, ZAP, APKHunt, etc.). This link opens in a new tab and does not require the server-side browser-open gate. The separate **Web UI** button remains the gated server-side launch described in section 2.2.
 
+### 3.2 Dashboard UI and shell behaviour
+
+Both the default static dashboard and the opt-in React dashboard share a compact cyber-glass design: frosted sidebar and summary cards, a dark grid backdrop, numbered tab chips, and an ordered sequence rail — **Intake → Static → SCA → Evidence → Lab → Report**. Dense tables and the 52-card tool catalog use near-solid surfaces so small text stays readable; no finding, skipped tool or missing-configuration message is hidden by the styling. The status colour map is unchanged (work/running/installing/updating `#39ff14`, success `#4ade80`, info `#60a5fa`, low `#facc15`, high `#fb923c`, critical `#ff6b6b`).
+
+The bottom-right `›_ shell` tab opens the shell. **Clicking anywhere outside the shell hides it**; the tab and panel are the click-to-open targets. `pin` keeps it open across outside clicks, `Esc` hides it, and an unpinned shell still auto-hides after 30 seconds. Tool jobs continue to open the separate full-height live terminal, which auto-closes when the job finishes and keeps the authorized-use footer.
+
 ---
 
 ## 4. Android testing workflows

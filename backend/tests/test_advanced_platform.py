@@ -591,6 +591,23 @@ class AdvancedFeatureTests(unittest.TestCase):
             r"Installed: C:\java\bin\java.exe",
         )
 
+    def test_react_ui_has_cyber_glass_assets(self):
+        styles = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("--glass", styles)
+        self.assertIn(".seq-rail", styles)
+        self.assertIn(".sec-head", styles)
+        self.assertIn("counter-reset: tabno", styles)
+        self.assertIn("@supports not", styles)
+        sequence = (ROOT / "frontend" / "src" / "components" / "SequenceRail.jsx").read_text(encoding="utf-8")
+        self.assertIn("seq-step", sequence)
+        self.assertIn("Analysis sequence", sequence)
+        shell = (ROOT / "frontend" / "src" / "components" / "MiniShell.jsx").read_text(encoding="utf-8")
+        self.assertIn("pointerdown", shell)
+        self.assertIn("shellRootRef", shell)
+        self.assertIn("click outside hides", shell)
+        app = (ROOT / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
+        self.assertIn("SequenceRail", app)
+
     def test_tool_web_ports_are_dedicated_and_opt_in(self):
         with patch.dict(os.environ, {}, clear=False):
             for key in list(config.TOOL_WEB_PORT_ENV.values()) + list(config.TOOL_WEB_URL_ENV.values()):
@@ -889,6 +906,7 @@ class AdvancedFeatureTests(unittest.TestCase):
                 self.assertIn("Live tool job terminal", dashboard.text)
                 self.assertIn("showAutoTerm", dashboard.text)
                 self.assertIn("closes automatically when the job finishes", dashboard.text)
+                self.assertIn("backdrop-filter", dashboard.text)
                 main_page = client.get("/")
                 self.assertEqual(main_page.status_code, 200)
                 self.assertIn("tool-access", main_page.text)
@@ -900,6 +918,11 @@ class AdvancedFeatureTests(unittest.TestCase):
                 self.assertIn("toolResultMessage", main_page.text)
                 self.assertIn("data-tool-why", main_page.text)
                 self.assertIn("installable", main_page.text)
+                self.assertIn("seq-rail", main_page.text)
+                self.assertIn("sec-head", main_page.text)
+                self.assertIn("backdrop-filter", main_page.text)
+                self.assertIn("click outside hides", main_page.text)
+                self.assertIn("pointerdown", main_page.text)
 
     def test_installed_inventory_and_html_dashboard(self):
         with tempfile.TemporaryDirectory() as tmp:

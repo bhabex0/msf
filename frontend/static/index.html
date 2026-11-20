@@ -6,7 +6,7 @@
 <title>APK Pentest Platform</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230ea5e9'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-size='26' font-family='Arial' font-weight='bold' fill='%2304121f'%3EAPK%3C/text%3E%3C/svg%3E">
 <style>
-:root{--bg:#0b1120;--side:#0f172a;--panel:#131c31;--panel2:#18243c;--line:#24334f;--text:#e6edf7;--muted:#8b9bb4;--accent:#38bdf8;--crit:#f04438;--high:#f97066;--med:#fdb022;--low:#53b1fd;--info:#98a2b3;--green:#12b76a;--work:#39ff14;--normal:#4ade80;--op-low:#facc15;--op-high:#fb923c;--op-info:#60a5fa}
+:root{--bg:#0b1120;--side:#0f172a;--panel:#131c31;--panel2:#18243c;--line:#24334f;--text:#e6edf7;--muted:#8b9bb4;--accent:#38bdf8;--crit:#f04438;--high:#f97066;--med:#fdb022;--low:#53b1fd;--info:#98a2b3;--green:#12b76a;--work:#39ff14;--normal:#4ade80;--op-low:#facc15;--op-high:#fb923c;--op-info:#60a5fa;--op-critical:#ff6b6b;--glass:rgba(13,23,42,.62);--glass-solid:rgba(10,18,32,.84);--glass-line:rgba(148,180,220,.16);--glass-hi:rgba(255,255,255,.06);--seq:#5b7396;--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
 button,input{font:inherit}button{cursor:pointer}a{color:var(--accent)}
 .shell{display:flex;min-height:100vh}
@@ -121,6 +121,79 @@ pre{background:#0a1425;border:1px solid var(--line);border-radius:8px;padding:12
 .at-foot{padding:8px 13px;border-top:1px solid #1d5b32;background:#062116;color:#9bd8ad;font-size:10px}
 @media(max-width:1000px){.shell{flex-direction:column}.sidebar{width:100%;flex-basis:auto;position:static;height:auto}.main{padding:20px}.stats{grid-template-columns:repeat(3,1fr)}.fb{padding-left:16px}}
 @media(max-width:600px){.mini-shell{right:8px;bottom:8px}.shell-panel{width:calc(100vw - 16px);height:340px;max-height:65vh}.auto-term{width:calc(100vw - 16px);right:8px;top:8px;bottom:8px}}
+
+/* ---------------- cyber glass refresh ----------------
+   Glass stays on the chrome and summary cards; dense tables and tool grids
+   use a near-solid surface so small text keeps its contrast. */
+body{font-size:12.5px;line-height:1.5;background:
+  radial-gradient(900px 520px at 10% -10%,rgba(56,189,248,.16),transparent 62%),
+  radial-gradient(760px 480px at 92% 4%,rgba(99,102,241,.15),transparent 64%),
+  radial-gradient(680px 460px at 60% 110%,rgba(16,185,129,.09),transparent 60%),
+  linear-gradient(180deg,#070b14 0%,#0a1020 55%,#060a12 100%);background-attachment:fixed}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(120,160,210,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,210,.045) 1px,transparent 1px);
+  background-size:32px 32px;-webkit-mask-image:linear-gradient(to bottom,#000,transparent 80%);mask-image:linear-gradient(to bottom,#000,transparent 80%)}
+.shell{position:relative;z-index:1}
+.sidebar{background:var(--glass);border-right:1px solid var(--glass-line);-webkit-backdrop-filter:blur(12px) saturate(140%);backdrop-filter:blur(12px) saturate(140%);box-shadow:0 10px 34px #0006,inset 0 1px 0 var(--glass-hi)}
+.main{padding:20px 28px 72px}
+.sidebar .mark{box-shadow:0 0 18px rgba(56,189,248,.25),inset 0 1px 0 var(--glass-hi)}
+.brand .bs{font-family:var(--mono);font-size:9px;letter-spacing:.16em}
+.list-title,.engines h4{font-family:var(--mono);font-size:10px;letter-spacing:.14em}
+.scan,.sel,.drop{background:rgba(10,18,32,.6);border-color:var(--glass-line)}
+.scan.active{border-color:rgba(56,189,248,.45);box-shadow:0 0 12px rgba(56,189,248,.12)}
+.scan .n{font-size:11.5px}.scan .p{font-family:var(--mono)}
+.mc,.meta-card,.st,.risk,.wgrid>div{background:var(--glass);border:1px solid var(--glass-line);-webkit-backdrop-filter:blur(12px) saturate(140%);backdrop-filter:blur(12px) saturate(140%);box-shadow:0 10px 30px #0005,inset 0 1px 0 var(--glass-hi);border-radius:9px}
+.rhead h1{font-size:21px;letter-spacing:-.01em}.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.16em}
+.rsub{font-family:var(--mono);font-size:10.5px}
+.st{padding:9px 10px}.st .n{font-size:22px;line-height:1.1}.st .l{font-family:var(--mono);font-size:9px;letter-spacing:.1em}
+.risk{padding:9px 16px}.risk .n{font-size:24px}.risk .l{font-family:var(--mono);font-size:9px;letter-spacing:.12em}
+.small{font-size:11px}.muted.small,.muted{color:var(--muted)}
+table{font-size:11.5px}th,td{padding:7px 10px}th{font-family:var(--mono);font-size:9px;letter-spacing:.1em}
+pre,.mono,code{font-family:var(--mono);font-size:11px}
+.tw,.f,.job,.advanced-table .tw{background:var(--glass-solid);border-color:var(--glass-line)}
+.f{margin-bottom:7px}.ft{padding:9px 12px}.fb{padding-left:74px}
+.seq-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:6px;margin:14px 0 16px}
+.seq-step{position:relative;padding:8px 9px;border:1px solid var(--glass-line);border-radius:7px;background:rgba(10,18,32,.7);overflow:hidden}
+.seq-step::after{content:"";position:absolute;right:-8px;top:50%;width:12px;height:1px;background:var(--glass-line);transform:translateY(-50%)}
+.seq-step:last-child::after{display:none}
+.seq-step .num{font:700 9px/1 var(--mono);letter-spacing:.1em;color:var(--seq)}
+.seq-step .lbl{display:block;margin-top:5px;font:700 10px/1.2 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.seq-step .val{display:block;margin-top:4px;font:10px/1.2 var(--mono);color:var(--text)}
+.seq-step.done{border-color:rgba(74,222,128,.32);box-shadow:inset 2px 0 0 var(--normal)}
+.seq-step.done .num{color:var(--normal)}
+.seq-step.active{border-color:rgba(57,255,20,.45);box-shadow:0 0 12px rgba(57,255,20,.12),inset 2px 0 0 var(--work)}
+.seq-step.active .num{color:var(--work)}
+.seq-step.skip{opacity:.72}
+.sec-head{display:flex;align-items:center;gap:9px;margin:18px 0 9px;color:var(--muted);font:700 10px/1 var(--mono);text-transform:uppercase;letter-spacing:.14em}
+.sec-head::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--glass-line),transparent)}
+.sec-head .idx{color:var(--accent)}
+.tabs{gap:5px;padding-bottom:6px;margin-bottom:14px;border-bottom-color:var(--glass-line);counter-reset:tabno}
+.tabs button{padding:7px 9px;border:1px solid var(--glass-line);border-radius:6px;background:rgba(255,255,255,.03);font:700 10px/1.2 var(--mono);text-transform:uppercase;letter-spacing:.06em;counter-increment:tabno}
+.tabs button::before{content:counter(tabno,decimal-leading-zero);margin-right:6px;font-size:9px;color:var(--seq)}
+.tabs button:hover{border-color:rgba(56,189,248,.35)}
+.tabs button.active{border-color:rgba(56,189,248,.45);background:rgba(56,189,248,.12);color:var(--accent);box-shadow:0 0 12px rgba(56,189,248,.14),inset 0 1px 0 var(--glass-hi)}
+.tabs button.active::before{color:var(--work)}
+.tool-group{background:rgba(10,18,32,.7);border-color:var(--glass-line)}
+.tg-head{border-bottom-color:var(--glass-line)}
+.tg-icon{background:rgba(56,189,248,.08);border-color:rgba(56,189,248,.2)}
+.tool-card{background:linear-gradient(160deg,rgba(20,34,58,.72),rgba(9,16,30,.82));border-color:var(--glass-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.tool-card:hover{border-color:rgba(56,189,248,.45);box-shadow:0 0 14px rgba(56,189,248,.1)}
+.tool-card.invasive{border-left:2px solid var(--op-high)}
+.tc-title strong{font-size:11.5px}.tc-title small{font-family:var(--mono);font-size:9.5px}
+.tc-desc{font-size:10.5px;line-height:1.4;min-height:28px}
+.tool-act{font-size:9.5px;padding:3px 5px}
+.btn.compact{font-size:10px;padding:4px 7px}
+.kv{font-size:11px}.chip{font-family:var(--mono);font-size:9.5px}
+.welcome{margin:5vh auto}.welcome h1{font-size:24px}.welcome .ic{font-size:44px;text-shadow:0 0 22px rgba(56,189,248,.4)}
+.shell-tab{background:rgba(9,17,31,.82);border-color:rgba(56,189,248,.45);font:700 10px/1 var(--mono);letter-spacing:.08em;padding:8px 13px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.shell-panel{background:rgba(7,14,27,.9);border-color:rgba(56,189,248,.25);box-shadow:0 18px 50px #0009,0 0 22px rgba(56,189,248,.08),inset 0 1px 0 var(--glass-hi);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.shell-head{background:rgba(14,25,44,.9)}
+.shell-log{font-size:11px;background:rgba(3,9,18,.86)}
+.auto-term{background:rgba(3,15,9,.84);border-color:rgba(57,255,20,.45);box-shadow:0 0 26px rgba(57,255,20,.14),0 18px 48px #0009,-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.at-log{font-size:11px}.at-foot{font-size:9.5px}
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.sidebar,.mc,.meta-card,.st,.risk,.wgrid>div{background:rgba(12,21,38,.92)}}
+@media(prefers-reduced-transparency:reduce){body{background:#080d18}body::before{display:none}.sidebar,.mc,.meta-card,.st,.risk,.wgrid>div,.shell-panel,.auto-term{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(12,21,38,.96)}}
+@media(max-width:1000px){.seq-rail{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
 <body>
@@ -152,7 +225,7 @@ pre{background:#0a1425;border:1px solid var(--line);border-radius:8px;padding:12
       <input class="shell-input" id="shell-input" placeholder="apktool install · install all · help" autocomplete="off" spellcheck="false" aria-label="Shell command">
       <button class="btn compact" id="shell-run">Run</button>
     </div>
-    <div class="shell-hint">help · status · jobs · sync · open mobsf · ↑/↓ history · Esc hides · auto-hides after 30s · drag corner to resize<br>green work/success · blue info · yellow low · orange high · red critical · authorized use only</div>
+    <div class="shell-hint">help · status · jobs · sync · open mobsf · ↑/↓ history · click outside hides · click ›_ shell opens · Esc hides · auto-hides after 30s · drag corner to resize<br>green work/success · blue info · yellow low · orange high · red critical · authorized use only</div>
   </div>
   <button class="shell-tab" id="shell-tab" title="Toggle shell">›_ shell</button>
 </div>
@@ -240,6 +313,7 @@ function renderMain() {
   if (!r) {
     $('#main').innerHTML = `<div class="welcome"><div class="ic">◇</div><h1>Upload an APK to begin</h1>
       <p>The platform unpacks the APK, inspects the manifest and DEX strings, matches vulnerable components, and — when a device is connected — runs dynamic checks. Reports are generated as self-contained HTML and JSON.</p>
+      ${sequenceHtml(null)}
       <div class="wgrid">
         <div><strong>Static analysis</strong><span>Permissions, exported components, debuggable flags, secrets, TLS bypasses, WebView and crypto issues.</span></div>
         <div><strong>Composition analysis</strong><span>Detect bundled libraries and match known vulnerabilities using an offline database and OSV.dev.</span></div>
@@ -260,7 +334,7 @@ function renderMain() {
     return
   }
   if (r.status==='failed') { $('#main').innerHTML = `<div class="banner err">Scan failed: ${esc(r.error)}</div>`+resultHead(r); return }
-  $('#main').innerHTML = resultHead(r) + tabs(r) + tabContent(r)
+  $('#main').innerHTML = resultHead(r) + sequenceHtml(r) + tabs(r) + tabContent(r)
 }
 
 function resultHead(r) {
@@ -273,9 +347,28 @@ function resultHead(r) {
     <div class="st total"><div class="n">${s.total??0}</div><div class="l">total</div></div></div>`
 }
 
+function sequenceHtml(r) {
+  const count=(v)=>Array.isArray(v)?v.length:Object.keys(v||{}).length
+  if (!r) {
+    const idle=[['01','Intake','APK queued'],['02','Static','manifest + dex'],['03','SCA','dependency graph'],['04','Evidence','pki · ble'],['05','Lab','tools + DAST'],['06','Report','export + gates']]
+    return `<div class="sec-head"><span class="idx">01</span> Operation sequence</div><div class="seq-rail">${idle.map(([n,l,v])=>`<div class="seq-step"><span class="num">${n}</span><span class="lbl">${l}</span><span class="val">${v}</span></div>`).join('')}</div>`
+  }
+  const steps=[
+    ['01','Intake',r.sha256?esc(String(r.sha256).slice(0,10)):'no hash',Boolean(r.sha256)],
+    ['02','Static',`${count(r.findings)} findings`,count(r.manifest)>0],
+    ['03','SCA',`${count(r.sca_findings)} advisories`,count(r.sca_findings)>0||count(r.sca_meta)>0],
+    ['04','Evidence',`pki ${count(r.pki)} · ble ${count(r.bluetooth)}`,count(r.pki)>0||count(r.bluetooth)>0],
+    ['05','Lab',`${count(r.tools)} tools · ${count(r.toolchain)} hooks`,count(r.tools)>0||count(r.toolchain)>0],
+    ['06','Report',`${count(r.exports)} exports`,r.status==='completed'&&count(r.exports)>0],
+  ]
+  return `<div class="sec-head"><span class="idx">01</span> Analysis sequence <span class="muted small">${esc(r.status||'')}</span></div>
+    <div class="seq-rail">${steps.map(([n,l,v,ok],i)=>`<div class="seq-step ${ok?'done':i===0?'active':'skip'}"><span class="num">${n}</span><span class="lbl">${l}</span><span class="val">${v}</span></div>`).join('')}</div>`
+}
+
 function tabs(r) {
   const names=['Findings','Components','Advanced','PKI','Bluetooth','Chains','Medical','Toolchain','Lab','Live','Policy','Dynamic','Tools','Metadata','Diff','Report']
-  return `<div class="tabs">${names.map(n=>`<button class="${state.tab===n?'active':''}" data-tab="${n}">${n}</button>`).join('')}</div>`
+  return `<div class="sec-head"><span class="idx">02</span> Report sections <span class="muted small">${names.length} views</span></div>
+    <div class="tabs">${names.map(n=>`<button class="${state.tab===n?'active':''}" data-tab="${n}">${n}</button>`).join('')}</div>`
 }
 
 function allFindings(r) { return [...(r.findings||[]), ...(r.sca_findings||[])] }
@@ -999,6 +1092,12 @@ function shellClear() {
 function wireShell() {
   const tab=$('#shell-tab'), panel=$('#shell-panel'), input=$('#shell-input')
   tab?.addEventListener('click', ()=>shellSetOpen(!state.shell.open))
+  document.addEventListener('pointerdown', e => {
+    const sh=state.shell
+    if (!sh.open || sh.pinned || sh.jobId) return
+    if (e.target?.closest?.('#mini-shell')) return
+    shellSetOpen(false)
+  })
   $('#shell-close')?.addEventListener('click', ()=>shellSetOpen(false))
   $('#shell-clear')?.addEventListener('click', shellClear)
   $('#shell-run')?.addEventListener('click', shellRun)

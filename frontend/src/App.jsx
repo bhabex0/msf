@@ -6,6 +6,7 @@ import ResultView from './components/ResultView.jsx'
 import ToolManager from './components/ToolManager.jsx'
 import MiniShell from './components/MiniShell.jsx'
 import LiveJobTerminal from './components/LiveJobTerminal.jsx'
+import SequenceRail from './components/SequenceRail.jsx'
 
 export default function App() {
   const [health, setHealth] = useState(null)
@@ -199,12 +200,20 @@ function Welcome() {
         components, and — when a device is connected — runs dynamic checks. Reports are generated
         as self-contained HTML and JSON.
       </p>
+      <SequenceRail />
       <div className="welcome-grid">
         <div><strong>Static analysis</strong><span>Permissions, exported components, debuggable flags, secrets, TLS bypasses, WebView and crypto issues.</span></div>
         <div><strong>Composition analysis</strong><span>Detect bundled libraries and match known vulnerabilities using an offline database and OSV.dev.</span></div>
-        <div><strong>Dynamic analysis</strong><span>adb-driven install/launch/logcat checks, with optional Frida hooks and proxy capture.</span></div>
+        <div><strong>Dynamic analysis</strong><span>adb-driven install/launch/logcat checks, intent fuzzing, deep-link tests, optional Frida hooks and proxy capture.</span></div>
+        <div><strong>Advanced analysis</strong><span>Deep links, NSC hardening, native ELF hardening, trackers, packers, attack chains, compliance mapping and live checks.</span></div>
+        <div><strong>PKI &amp; signing</strong><span>Certificate fingerprints, algorithm/key-size checks, TLS trust configuration and local lab CA/keystore controls.</span></div>
+        <div><strong>Bluetooth &amp; BLE</strong><span>Passive permission, GATT/API and UUID evidence for manual review. No radio scan, pairing or device changes.</span></div>
+        <div><strong>Enterprise exports</strong><span>CycloneDX SBOM, SARIF, policy gates, scan diffing, custom rules, optional auth and an append-only audit log.</span></div>
+        <div><strong>Medical / PHI focus</strong><span>Masked clinical-identifier detection, HIPAA/GDPR/FDA/IEC 62304 evidence mapping and healthcare control gaps.</span></div>
+        <div><strong>Advanced toolchain &amp; lab</strong><span>APKHunt, APKLeaks, AppScan, MobSF, TrashDroid, Burp/ZAP/mitmproxy, Chromium and patching plans.</span></div>
+        <div><strong>Tool manager</strong><span>Gated install/update jobs, per-tool repository pull, source verification and emulator setup with live logs.</span></div>
       </div>
-      <p className="muted small">For authorized security testing only. Heuristic findings require manual verification.</p>
+      <p className="muted small">For authorized security testing only. Heuristic findings require manual verification. Medical mappings are not certifications.</p>
     </div>
   )
 }

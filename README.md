@@ -83,6 +83,12 @@ python tools/verify_all.py --iterations 100           # repeated verification
 5. From **Diff**, choose another completed scan to see new, resolved and changed findings.
 6. Click **Tools & emulator manager** in the sidebar for one-click install/update, per-tool pull, source verification, emulator setup, installed-software inventory and job logs. Open **Installed software dashboard** for the standalone HTML view of executables, setup files, official sources, emulator needs and web-UI launch buttons.
 
+### Dashboard layout and shell behaviour
+
+The dashboard uses a compact cyber-glass theme: frosted chrome and summary cards over a dark grid, numbered tabs, an ordered **operation/analysis sequence** rail (Intake → Static → SCA → Evidence → Lab → Report), and dense near-solid surfaces for tables and the tool catalog. Small monospaced labels keep information readable without hiding unavailable or skipped results.
+
+The `›_ shell` tab in the bottom-right opens the shell. **Clicking anywhere outside the shell hides it**; clicking the shell tab or panel keeps/opens it. `pin` overrides outside-click hiding, `Esc` hides it, and an unattended shell still auto-hides after 30 seconds. Starting a tool job opens the separate full-height live terminal, which closes automatically when the job finishes.
+
 Scan history is stored on disk, so previous reports remain available after a restart.
 
 ---

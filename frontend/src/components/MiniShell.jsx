@@ -11,6 +11,7 @@ export default function MiniShell() {
   ])
 
   const logRef = useRef(null)
+  const shellRootRef = useRef(null)
   const inputRef = useRef(null)
   const hideRef = useRef(null)
   const jobRef = useRef(null)
@@ -151,8 +152,21 @@ export default function MiniShell() {
     return () => document.removeEventListener('keydown', onGlobalKey)
   }, [open, toggle])
 
+  // Clicking anywhere outside the shell hides it; the shell tab and panel
+  // remain interactive. Pinning or a running job keeps it open.
+  useEffect(() => {
+    if (!open) return undefined
+    const onOutside = (e) => {
+      if (pinned || jobRef.current) return
+      if (shellRootRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    document.addEventListener('pointerdown', onOutside)
+    return () => document.removeEventListener('pointerdown', onOutside)
+  }, [open, pinned])
+
   return (
-    <div className="mini-shell">
+    <div className="mini-shell" ref={shellRootRef}>
       {open && (
         <div className="shell-panel open" role="region" aria-label="Tool shell">
           <div className="shell-head">
@@ -186,7 +200,7 @@ export default function MiniShell() {
             <button type="button" className="btn compact" onClick={run}>Run</button>
           </div>
           <div className="shell-hint">
-            help · status · jobs · sync · open mobsf · ↑/↓ history · Esc hides · auto-hides after 30s · drag corner to resize
+            help · status · jobs · sync · open mobsf · ↑/↓ history · click outside hides · click ›_ shell opens · Esc hides · auto-hides after 30s · drag corner to resize
             <br />green work/success · blue info · yellow low · orange high · red critical · authorized use only
           </div>
         </div>

@@ -1064,8 +1064,10 @@ def installed_dashboard_html() -> str:
 <title>Installed tools · APK Pentest Platform</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230ea5e9'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-size='26' font-family='Arial' font-weight='bold' fill='%2304121f'%3EAPK%3C/text%3E%3C/svg%3E">
 <style>
-:root{{--bg:#0b1120;--panel:#131c31;--panel2:#18243c;--line:#24334f;--text:#e6edf7;--muted:#8b9bb4;--accent:#38bdf8;--work:#39ff14;--normal:#4ade80;--op-info:#60a5fa;--op-low:#facc15;--op-high:#fb923c}}
-body{{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 Inter,-apple-system,Segoe UI,Roboto,Arial,sans-serif}}
+:root{{--bg:#0b1120;--panel:#131c31;--panel2:#18243c;--line:#24334f;--text:#e6edf7;--muted:#8b9bb4;--accent:#38bdf8;--work:#39ff14;--normal:#4ade80;--op-info:#60a5fa;--op-low:#facc15;--op-high:#fb923c;--op-critical:#ff6b6b;--glass:rgba(13,23,42,.62);--glass-line:rgba(148,180,220,.16);--glass-hi:rgba(255,255,255,.06);--mono:ui-monospace,SFMono-Regular,Consolas,monospace}}
+body{{margin:0;background:radial-gradient(900px 520px at 10% -10%,rgba(56,189,248,.16),transparent 62%),radial-gradient(760px 480px at 92% 4%,rgba(99,102,241,.15),transparent 64%),linear-gradient(180deg,#070b14 0%,#0a1020 55%,#060a12 100%);background-attachment:fixed;color:var(--text);font:12.5px/1.5 Inter,-apple-system,Segoe UI,Roboto,Arial,sans-serif}}
+body::before{{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(120,160,210,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,210,.045) 1px,transparent 1px);background-size:32px 32px;-webkit-mask-image:linear-gradient(to bottom,#000,transparent 80%);mask-image:linear-gradient(to bottom,#000,transparent 80%)}}
+.page{{position:relative;z-index:1}}
 a{{color:var(--accent)}}.wrap{{word-break:break-word}}.mono{{font-family:ui-monospace,Consolas,monospace}}
 .muted{{color:var(--muted)}}.small{{font-size:12px}}.empty{{color:var(--muted);padding:18px;text-align:center}}
 .page{{max-width:1400px;margin:0 auto;padding:28px}}.banner{{background:#12283f;border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:12px 0 20px;color:var(--muted)}}
@@ -1121,6 +1123,16 @@ ul{{padding-left:18px}}li{{margin-bottom:12px}}pre{{background:#0a1425;border:1p
 .op-work{{color:#39ff14;border-left-color:#39ff14;text-shadow:0 0 6px #39ff1477}}
 .op-ok{{color:#4ade80;border-left-color:#22c55e}}.op-dim{{color:var(--muted)}}
 @media(max-width:900px){{.kv{{grid-template-columns:1fr}}}}
+.card,.tw{{background:var(--glass);border:1px solid var(--glass-line);border-radius:9px;-webkit-backdrop-filter:blur(12px) saturate(140%);backdrop-filter:blur(12px) saturate(140%);box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 1px 0 var(--glass-hi)}}
+.tool-group{{background:rgba(10,18,32,.7);border-color:var(--glass-line)}}
+.tool-card{{background:linear-gradient(160deg,rgba(20,34,58,.72),rgba(9,16,30,.82));border-color:var(--glass-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}}
+.tool-card:hover{{border-color:rgba(56,189,248,.45);box-shadow:0 0 14px rgba(56,189,248,.1)}}
+.tc-title strong{{font-size:11.5px}}.tc-desc{{font-size:10.5px;min-height:28px}}.tool-act{{font-size:9.5px}}
+table{{font-size:11.5px}}th,td{{padding:7px 10px}}th{{font-family:var(--mono);font-size:9px;letter-spacing:.1em}}
+.mono,pre{{font-family:var(--mono);font-size:11px}}.small{{font-size:11px}}
+.auto-term{{background:rgba(3,15,9,.84);border-color:rgba(57,255,20,.45);box-shadow:0 0 26px rgba(57,255,20,.14),0 18px 48px rgba(0,0,0,.56);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}}
+.at-log{{font-size:11px}}.at-foot{{font-size:9.5px}}
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){{.card,.tw{{background:rgba(12,21,38,.92)}}}}
 </style></head><body><div class="page">
 <div class="rhead"><div><div class="eyebrow" style="color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.12em">Local inventory</div>
 <h1 style="margin:4px 0 8px">Installed software dashboard</h1>
