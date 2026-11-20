@@ -1616,6 +1616,13 @@ def _installed_version(spec: ToolSpec) -> tuple[bool, str, str]:
     if spec.id in PKI_LOCAL_IDS:
         path = _pki_command_path(spec)
         return (bool(path), _read_meta(spec.id).get("version", ""), path)
+    # Locally staged web tools may live in an isolated venv/runtime directory
+    # that is not on the platform's PATH. Their inventory metadata is the
+    # authoritative local install record for those rows.
+    local_meta = _read_meta(spec.id)
+    local_path = Path(str(local_meta.get("path", "")))
+    if spec.id in {"mobsf", "zaproxy"} and local_path.is_file():
+        return True, str(local_meta.get("version", "")), str(local_path)
     if spec.method == "pip":
         try:
             version = importlib.metadata.version(spec.package)

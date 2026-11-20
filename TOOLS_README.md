@@ -304,7 +304,26 @@ $env:APKPT_MOBSF_PORT='8001'
 $env:APKPT_MOBSF_DYNAMIC_PORT='8002'
 ```
 
-If you only run one MobSF container (recommended when Docker is unavailable), omit `APKPT_MOBSF_DYNAMIC_PORT`; dynamic analysis uses the same instance on `8001`. This host currently has no Docker daemon or WSL distribution, and MobSF's Windows pip install fails on the `lief` wheel, so only the shared-instance setup can be used here until Docker/WSL is installed.
+If you only run one MobSF container, omit `APKPT_MOBSF_DYNAMIC_PORT`; dynamic analysis uses the same instance on `8001`. This host has no Docker daemon or usable WSL distribution, so the lab uses a native loopback install instead: Python 3.12.10 under `backend/storage/tools/python/python312`, MobSF 4.6.9 in `backend/storage/tools/apps/mobsf-venv`, and the local jadx/apktool/ADB/aapt2 overrides. Python 3.15.2 cannot install the current MobSF wheels on Windows.
+
+### 3.1 Local native dashboard services (authorized lab)
+
+For authorized security testing only. The four requested web tools are installed and left listening on loopback only. They are started separately from the platform; the dashboard's **Open URL** and gated **Web UI** actions never start or modify a service.
+
+| Dashboard URL | Tool | Local install |
+| --- | --- | --- |
+| `http://127.0.0.1:8001/` | MobSF 4.6.9 | `backend/storage/tools/apps/mobsf-venv/Scripts/mobsf.exe` |
+| `http://127.0.0.1:8003/` | APKHunt (`d75317204716`) | `backend/storage/tools/repos/apkhunt` |
+| `http://127.0.0.1:8004/` | RMS 1.5.25 | `backend/storage/tools/repos/rms` |
+| `http://127.0.0.1:8005/UI` | OWASP ZAP 2.17.0 | `backend/storage/tools/apps/zap/ZAP_2.17.0/zap.bat` |
+
+The platform is reachable at `http://127.0.0.1:8000/`. A local helper, `backend/storage/tools/start_lab_tools.ps1`, starts or reuses the four services on their dedicated ports and restarts/refreshes the platform with the configured URLs:
+
+```powershell
+& 'C:\Users\bhabe\Documents\PROJECTS\apk-pentest-platform\backend\storage\tools\start_lab_tools.ps1'
+```
+
+The helper does not launch or stop an emulator, install an APK, attach a device proxy, install a CA, or touch radio/firmware/bootloader/BIOS state. APKHunt's `fcntl.py` shim and `os.fchmod` fallback are local Windows compatibility changes to the staged copy only. Verification evidence and install logs are under `backend/storage/reports/Sensinel_Clinician_v4.0.0-103_2026-11-20/evidence/tool_verification/`.
 
 MobSF supports rooted Android VMs up to API 30 and, from v4.6.0, Frida Gadget mode for non-rooted/newer Android 5.0+ targets. For Docker with a host ADB server, restrict port `5037` to the Docker host.
 
@@ -728,6 +747,11 @@ $env:APKPT_APKHUNT_PORT='8003'
 $env:APKPT_RMS_PORT='8004'
 $env:APKPT_ZAP_WEB_PORT='8005'
 # Full URLs still override the generated http://127.0.0.1:<port> values.
+# This lab's configured values are:
+$env:APKPT_MOBSF_URL='http://127.0.0.1:8001'
+$env:APKPT_APKHUNT_URL='http://127.0.0.1:8003'
+$env:APKPT_RMS_URL='http://127.0.0.1:8004'
+$env:APKPT_ZAP_WEB_URL='http://127.0.0.1:8005/UI'
 
 # MobSF integration
 $env:APKPT_MOBSF_PORT='8001'
