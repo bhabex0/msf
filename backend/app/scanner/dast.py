@@ -26,10 +26,8 @@ SENSITIVE_LOG_RE = re.compile(r"(password|passwd|token|secret|api[_-]?key|author
 def _component_target(package: str, name: str) -> str:
     """Convert a manifest component name to an `am start -n` target."""
     name = name.strip()
-    if name.startswith("."):
-        return f"{package}/{name[1:]}"
-    if name.startswith(package + "."):
-        return f"{package}/{name[len(package) + 1:]}"
+    if "." not in name:
+        name = "." + name
     return f"{package}/{name}"
 
 
@@ -505,7 +503,7 @@ def run_dast(
                     )
                 )
     else:
-        result.check("frida", "skipped", "Set APKPT_config.DAST_FRIDA=1 and install frida-tools to enable hooking.")
+        result.check("frida", "skipped", "Set APKPT_DAST_FRIDA=1 and install frida-tools to enable hooking.")
 
     try:
         remote = "/sdcard/apkpt_screen.png"
