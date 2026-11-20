@@ -48,6 +48,20 @@ function ToolCard({ tool, onStart, onWeb, onMessage }) {
       </button>,
     )
   }
+  if (tool.web_url) {
+    actions.push(
+      <a
+        className="tool-act web"
+        key="web-url"
+        href={tool.web_url}
+        target="_blank"
+        rel="noreferrer"
+        title={`Open ${tool.name} directly at ${tool.web_url}`}
+      >
+        <span aria-hidden="true">↗</span>Open URL
+      </a>,
+    )
+  }
   if (tool.web_open) {
     actions.push(
       <button type="button" className="tool-act web" key="web" title={`Open configured web UI for ${tool.name}`} onClick={() => onWeb(tool.id)}>

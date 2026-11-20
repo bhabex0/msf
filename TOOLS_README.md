@@ -181,7 +181,18 @@ Run the platform on `8000` and give each optional web UI its own local port:
 | RMS | `8004` | `APKPT_RMS_PORT` | `APKPT_RMS_URL` |
 | ZAP web UI | `8005` | `APKPT_ZAP_WEB_PORT` | `APKPT_ZAP_WEB_URL` |
 
-Setting a port variable builds `http://127.0.0.1:<port>`; no URL is guessed until then. A full `*_URL` value always wins. The **Web UI ports** panel in the tool manager shows the recommended values and currently configured URLs. Web UI launching still requires the existing browser-open gate described in section 2.2.
+Setting a port variable builds `http://127.0.0.1:<port>`; no URL is guessed until then. A full `*_URL` value always wins.
+
+To activate all five tool ports automatically when the platform listens on `8000`, use either:
+
+```bash
+python run.py --port 8000 --auto-web-ports
+# or set APKPT_TOOL_WEB_AUTO=1
+```
+
+The auto mode triggers only when the platform port matches `APKPT_TOOL_WEB_AUTO_TRIGGER_PORT` (default `8000`). On any other port, set the individual `*_PORT` or `*_URL` variables you need. The **Web UI ports** panel in the tool manager shows the recommended values, currently configured URLs, and an `auto` badge when activation is active.
+
+When a web URL is configured, each tool card also shows **Open URL**, a direct browser link to that tool (MobSF, RMS, ZAP, APKHunt, etc.). This link opens in a new tab and does not require the server-side browser-open gate. The separate **Web UI** button remains the gated server-side launch described in section 2.2.
 
 ---
 
@@ -699,6 +710,8 @@ $env:APKPT_BROWSER_OPEN='1'
 
 # Dedicated web-tool ports (platform stays on 8000)
 $env:APKPT_TOOL_WEB_HOST='127.0.0.1'
+$env:APKPT_TOOL_WEB_AUTO='1'          # activate all tool ports when platform is on 8000
+$env:APKPT_TOOL_WEB_AUTO_TRIGGER_PORT='8000'
 $env:APKPT_MOBSF_PORT='8001'
 $env:APKPT_MOBSF_DYNAMIC_PORT='8002'
 $env:APKPT_APKHUNT_PORT='8003'

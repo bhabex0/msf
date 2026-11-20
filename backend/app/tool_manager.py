@@ -660,6 +660,9 @@ def web_ports_status() -> dict[str, Any]:
         "recommended": dict(config.TOOL_WEB_PORTS),
         "port_env": dict(config.TOOL_WEB_PORT_ENV),
         "url_env": dict(config.TOOL_WEB_URL_ENV),
+        "auto_enabled": bool(config.TOOL_WEB_AUTO),
+        "auto_active": bool(config.TOOL_WEB_AUTO_ACTIVE),
+        "auto_trigger_port": config.TOOL_WEB_AUTO_TRIGGER_PORT,
         "configured_urls": {
             "mobsf": config.MOBSF_URL,
             "mobsf_dynamic": config.MOBSF_DYNAMIC_URL,
@@ -668,7 +671,8 @@ def web_ports_status() -> dict[str, Any]:
             "zaproxy": config.ZAP_WEB_URL,
         },
         "note": (
-            "Set an APKPT_*_PORT variable to build a local URL on a dedicated port. "
+            "Set an APKPT_*_PORT variable to build a local URL on a dedicated port, or enable "
+            "APKPT_TOOL_WEB_AUTO=1 with the platform on the trigger port to activate them all. "
             "A full APKPT_*_URL variable always wins. Web UI launching stays gated."
         ),
     }

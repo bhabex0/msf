@@ -46,7 +46,15 @@ The platform keeps port `8000`; each optional web UI has its own recommended loc
 | RMS | `8004` | `APKPT_RMS_PORT=8004` or `APKPT_RMS_URL=...` |
 | ZAP web UI | `8005` | `APKPT_ZAP_WEB_PORT=8005` or `APKPT_ZAP_WEB_URL=...` |
 
-Setting a `*_PORT` variable constructs `http://127.0.0.1:<port>` for that tool; a full `*_URL` variable always wins. No URL is guessed until you set one of these variables, and Web UI launching remains gated. The **Tools → Web UI ports** panel shows the effective values.
+Setting a `*_PORT` variable constructs `http://127.0.0.1:<port>` for that tool; a full `*_URL` variable always wins. To activate all five tool ports automatically when the platform runs on `8000`, start with:
+
+```bash
+python run.py --port 8000 --auto-web-ports
+```
+
+or set `APKPT_TOOL_WEB_AUTO=1`. This is opt-in and only triggers when the platform port matches `APKPT_TOOL_WEB_AUTO_TRIGGER_PORT` (default `8000`); a different platform port leaves tool URLs unconfigured unless you set them individually. Web UI launching remains gated. The **Tools → Web UI ports** panel shows the effective values and an `auto` badge when activation is active.
+
+When a URL is configured, tool cards show an **Open URL** link that opens MobSF, RMS, ZAP, APKHunt, etc. directly in a new browser tab. This direct link is a normal browser link and does not need the server-side browser-open gate; the separate **Web UI** button still uses the gated server-side launch for Chromium/system-browser workflows.
 
 Alternatively, run the API alone:
 
@@ -251,7 +259,9 @@ All settings are environment variables with sensible defaults:
 | `APKPT_TOOL_APKTOOL` / `_JADX` / `_AAPT` / `_SEMGREP` | `1` | Enable tool hooks when installed |
 | `APKPT_SEMGREP_TIMEOUT` | `90` | Semgrep timeout in seconds |
 | `APKPT_TOOL_WEB_HOST` | `127.0.0.1` | Host used when a `*_PORT` variable builds a tool web UI URL |
-| `APKPT_PLATFORM_PORT` | `8000` | Reported platform port (the actual listener is set with `run.py --port`) |
+| `APKPT_TOOL_WEB_AUTO` | `0` | When `1` and the platform port matches the trigger, activate all dedicated tool ports automatically |
+| `APKPT_TOOL_WEB_AUTO_TRIGGER_PORT` | `8000` | Platform port that triggers automatic tool web ports |
+| `APKPT_PLATFORM_PORT` | `8000` | Reported platform port; `run.py --port` sets this automatically for the child API process |
 | `APKPT_MOBSF_PORT` | `8001` | Build `APKPT_MOBSF_URL` on a dedicated local port when set |
 | `APKPT_MOBSF_URL` / `_API_KEY` | empty | MobSF static integration; a full URL overrides `APKPT_MOBSF_PORT` |
 | `APKPT_MOBSF_DYNAMIC_PORT` | `8002` | Build `APKPT_MOBSF_DYNAMIC_URL` on a dedicated local port when set |

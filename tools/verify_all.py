@@ -248,7 +248,9 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         web_ports = manager_catalog.get("web_ports") or {}
         require(len(set((web_ports.get("recommended") or {}).values())) == 6
                 and web_ports.get("recommended", {}).get("platform") == 8000
-                and web_ports.get("recommended", {}).get("mobsf") == 8001,
+                and web_ports.get("recommended", {}).get("mobsf") == 8001
+                and web_ports.get("auto_trigger_port") == 8000
+                and "auto_active" in web_ports,
                 f"iteration {index}: dedicated tool web ports are missing", failures)
         require(not tool_manager.safe_url("https://evil.example/tool.zip"),
                 f"iteration {index}: arbitrary tool source was accepted", failures)

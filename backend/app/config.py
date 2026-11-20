@@ -85,20 +85,28 @@ TOOL_WEB_URL_ENV = {
     "zaproxy": "APKPT_ZAP_WEB_URL",
 }
 
+# Opt-in: when the platform runs on the trigger port (8000 by default), build
+# local URLs for every web tool on its dedicated port automatically.
+TOOL_WEB_AUTO = os.getenv("APKPT_TOOL_WEB_AUTO", "0") == "1"
+TOOL_WEB_AUTO_TRIGGER_PORT = _tool_port("APKPT_TOOL_WEB_AUTO_TRIGGER_PORT", 8000)
+TOOL_WEB_AUTO_ACTIVE = TOOL_WEB_AUTO and TOOL_WEB_PORTS["platform"] == TOOL_WEB_AUTO_TRIGGER_PORT
+
 
 def _configured_web_url(url_env: str, port_env: str, port_key: str) -> str:
-    """Use an explicit URL, else build one only when its port was set explicitly."""
+    """Use an explicit URL, else build one when its port or auto mode is enabled."""
     explicit = os.getenv(url_env, "").strip().rstrip("/")
     if explicit:
         return explicit
-    if os.getenv(port_env, "").strip():
+    if os.getenv(port_env, "").strip() or TOOL_WEB_AUTO_ACTIVE:
         return f"http://{TOOL_WEB_HOST}:{TOOL_WEB_PORTS[port_key]}"
     return ""
 
 
 def _configured_web_port(port_env: str, port_key: str) -> int | None:
     """Return the active port only when the operator opted into it."""
-    return TOOL_WEB_PORTS[port_key] if os.getenv(port_env, "").strip() else None
+    if os.getenv(port_env, "").strip() or TOOL_WEB_AUTO_ACTIVE:
+        return TOOL_WEB_PORTS[port_key]
+    return None
 
 
 MOBSF_URL = _configured_web_url("APKPT_MOBSF_URL", "APKPT_MOBSF_PORT", "mobsf")

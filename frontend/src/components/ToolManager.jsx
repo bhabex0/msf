@@ -203,8 +203,13 @@ export default function ToolManager() {
           <p className="muted small">{(emulator.requirements || []).join(' · ')} Emulator setup does not launch or modify a device.</p>
         </div>
         <div className="mc">
-          <h3>Web UI ports</h3>
-          <p className="muted small">Dedicated local ports keep the platform and tool UIs from competing for 8000.</p>
+          <h3>
+            Web UI ports {webPorts.auto_active && <span className="pill completed">auto</span>}
+          </h3>
+          <p className="muted small">
+            Dedicated local ports keep the platform and tool UIs from competing for 8000.
+            {webPorts.auto_active ? ` Auto mode is active on port ${webPorts.auto_trigger_port || 8000}.` : ''}
+          </p>
           {Object.entries(portLabels).map(([key, label]) => (
             <div className="kv" key={key}>
               <span>{label} <span className="muted small">{webPorts.port_env?.[key] || ''}</span></span>
@@ -253,7 +258,7 @@ export default function ToolManager() {
         <summary>Detailed catalog table</summary>
         <div className="tw">
           <table>
-            <thead><tr><th>Tool</th><th>Category</th><th>Status</th><th>Version</th><th>Method</th><th>Notes</th></tr></thead>
+            <thead><tr><th>Tool</th><th>Category</th><th>Status</th><th>Version</th><th>Method</th><th>Web UI</th><th>Notes</th></tr></thead>
             <tbody>
               {tools.map((tool) => (
                 <tr key={tool.id}>
@@ -263,6 +268,10 @@ export default function ToolManager() {
                   <td><span className={`pill ${tool.installed ? 'completed' : 'skipped'}`}>{tool.installed ? 'installed' : 'missing'}</span></td>
                   <td className="mono small">{tool.version || '—'}</td>
                   <td>{tool.method}</td>
+                  <td>
+                    {tool.web_url && <a className="btn compact" href={tool.web_url} target="_blank" rel="noreferrer">Open URL</a>}{' '}
+                    {tool.web_open && <button className="btn compact" onClick={() => openWeb(tool.id)}>Web UI</button>}
+                  </td>
                   <td>{tool.invasive && <span className="pill error">invasive</span>}
                     {tool.install_note && <div className="small muted">{tool.install_note}</div>}</td>
                 </tr>

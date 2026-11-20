@@ -681,6 +681,7 @@ function toolCardHtml(tool) {
     if (tool.method==='git') acts.push(toolActionHtml(tool,'pull','⟲','Pull'))
     acts.push(toolActionHtml(tool,'verify','✓','Verify'))
   }
+  if (tool.web_url) acts.push(`<a class="tool-act web" href="${esc(tool.web_url)}" target="_blank" rel="noreferrer" title="Open ${esc(tool.name)} directly at ${esc(tool.web_url)}"><span aria-hidden="true">↗</span>Open URL</a>`)
   if (tool.web_open) acts.push(`<button class="tool-act web" data-tool-web="${esc(tool.id)}" title="Open configured web UI for ${esc(tool.name)}"><span aria-hidden="true">↗</span>Web UI</button>`)
   acts.push(`<a class="tool-act" href="${esc(tool.source_url)}" target="_blank" rel="noreferrer" title="Official source for ${esc(tool.name)}"><span aria-hidden="true">🔗</span>Source</a>`)
   return `<article class="tool-card ${tool.invasive?'invasive':''}">
@@ -743,6 +744,7 @@ function renderToolManager() {
       if (t.method==='git') actions+=' '+act('pull','Pull')
       actions+=' '+act('verify','Verify')
     }
+    if (t.web_url) actions+=` <a class="btn compact" href="${esc(t.web_url)}" target="_blank" rel="noreferrer">Open URL</a>`
     if (t.web_open) actions+=` <button class="btn compact" data-tool-web="${esc(t.id)}">Web UI</button>`
     return `<tr class="tool-row"><td><strong>${esc(t.name)}</strong><div class="small muted">${esc(t.description)}</div>
       <div class="small"><a href="${esc(t.source_url)}" target="_blank" rel="noreferrer">${esc(t.source_url)}</a></div></td>
@@ -771,7 +773,7 @@ function renderToolManager() {
       <div class="kv"><span>Java</span><span>${esc((c.emulator||{}).needs?.java_runtime||'')}</span></div>
       <div class="kv"><span>SDK root</span><span class="wrap">${esc(c.android_sdk_root||'')}</span></div>
       <p class="muted small">${((c.emulator||{}).requirements||[]).join(' · ')} Emulator setup does not launch or modify a device.</p></div>
-    <div class="mc"><h3>Web UI ports</h3><p class="muted small">Dedicated local ports keep the platform and tool UIs from competing for 8000.</p>
+    <div class="mc"><h3>Web UI ports ${wp.auto_active?'<span class="pill completed">auto</span>':''}</h3><p class="muted small">Dedicated local ports keep the platform and tool UIs from competing for 8000.${wp.auto_active?' Auto mode is active on port '+esc(String(wp.auto_trigger_port||8000))+'.':''}</p>
       ${wpRows}<p class="muted small">${esc(wp.note||'')}</p></div></div>
     <h3 style="margin-top:22px">Installed software database</h3>${installedHtml()}
     <div class="tool-access">

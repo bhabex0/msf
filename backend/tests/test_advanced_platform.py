@@ -612,6 +612,23 @@ class AdvancedFeatureTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 config._tool_port("APKPT_MOBSF_PORT", 8001)
 
+        with patch.object(config, "TOOL_WEB_AUTO_ACTIVE", True):
+            for tool_key, url_env, port_env, expected_port in (
+                ("mobsf", "APKPT_MOBSF_URL", "APKPT_MOBSF_PORT", 8001),
+                ("mobsf_dynamic", "APKPT_MOBSF_DYNAMIC_URL", "APKPT_MOBSF_DYNAMIC_PORT", 8002),
+                ("apkhunt", "APKPT_APKHUNT_URL", "APKPT_APKHUNT_PORT", 8003),
+                ("rms", "APKPT_RMS_URL", "APKPT_RMS_PORT", 8004),
+                ("zaproxy", "APKPT_ZAP_WEB_URL", "APKPT_ZAP_WEB_PORT", 8005),
+            ):
+                with patch.dict(os.environ, {}, clear=False):
+                    for key in (url_env, port_env):
+                        os.environ.pop(key, None)
+                    self.assertEqual(
+                        config._configured_web_url(url_env, port_env, tool_key),
+                        f"http://127.0.0.1:{expected_port}",
+                    )
+                    self.assertEqual(config._configured_web_port(port_env, tool_key), expected_port)
+
         status = tool_manager.web_ports_status()
         self.assertEqual(status["recommended"]["platform"], 8000)
         self.assertEqual(status["recommended"]["mobsf"], 8001)
@@ -620,6 +637,9 @@ class AdvancedFeatureTests(unittest.TestCase):
         self.assertEqual(status["recommended"]["rms"], 8004)
         self.assertEqual(status["recommended"]["zaproxy"], 8005)
         self.assertEqual(len(set(status["recommended"].values())), len(status["recommended"]))
+        self.assertIn("auto_enabled", status)
+        self.assertIn("auto_active", status)
+        self.assertEqual(status["auto_trigger_port"], 8000)
         self.assertIn("web_ports", tool_manager.catalog())
 
     def test_tool_manager_catalog_sources_and_gates(self):
