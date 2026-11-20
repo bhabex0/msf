@@ -114,6 +114,29 @@ export default function ToolManager() {
     }
   }
 
+  const openAllWeb = async () => {
+    try {
+      const result = await api('/api/tools/web/all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      })
+      await load()
+      const parts = [`all web UIs: ${result.status || 'done'}`]
+      if (result.detail) parts.push(result.detail)
+      if (result.note) parts.push(result.note)
+      setMessage(parts.join(' · '))
+      setMessageLevel(
+        result.level
+        || (result.status === 'error' ? 'critical'
+          : result.status === 'skipped' ? 'low' : 'ok'),
+      )
+    } catch (e) {
+      setMessage(e.message)
+      setMessageLevel('critical')
+    }
+  }
+
   const syncDb = async () => {
     try {
       const result = await api('/api/tools/installed/sync', {
@@ -162,6 +185,7 @@ export default function ToolManager() {
         <button className="btn" onClick={() => start('/api/tools/dast/install', 'dast')}>Install DAST tools</button>
         <button className="btn" onClick={syncDb}>Sync installed DB</button>
         <button className="btn" onClick={() => openWeb('mobsf')}>Open MobSF</button>
+        <button className="btn" onClick={openAllWeb}>Open all web UIs</button>
         <a className="btn" href="/tools/dashboard">Installed software HTML</a>
         <button className="btn" onClick={load}>Refresh</button>
       </div>
@@ -249,6 +273,7 @@ export default function ToolManager() {
         groups={catalog?.groups || []}
         onStart={start}
         onWeb={openWeb}
+        onOpenAll={openAllWeb}
         onMessage={(text, level = 'info') => {
           setMessage(text)
           setMessageLevel(level)

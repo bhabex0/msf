@@ -225,7 +225,7 @@ pre,.mono,code{font-family:var(--mono);font-size:11px}
       <input class="shell-input" id="shell-input" placeholder="apktool install · install all · help" autocomplete="off" spellcheck="false" aria-label="Shell command">
       <button class="btn compact" id="shell-run">Run</button>
     </div>
-    <div class="shell-hint">help · status · jobs · sync · open mobsf · ↑/↓ history · click outside hides · click ›_ shell opens · Esc hides · auto-hides after 30s · drag corner to resize<br>green work/success · blue info · yellow low · orange high · red critical · authorized use only</div>
+    <div class="shell-hint">help · status · jobs · catalog · open mobsf · open all · ↑/↓ history · click outside hides · click ›_ shell opens · Esc hides · auto-hides after 30s · drag corner to resize<br>green work/success · blue info · yellow low · orange high · red critical · authorized use only</div>
   </div>
   <button class="shell-tab" id="shell-tab" title="Toggle shell">›_ shell</button>
 </div>
@@ -742,6 +742,16 @@ async function openToolWeb(toolId) {
   } catch(e) { state.toolMsg=e.message; state.toolMsgLevel='critical'; renderToolManager() }
 }
 
+async function openAllWeb() {
+  try {
+    const result=await api('/api/tools/web/all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})})
+    await loadToolManager(true)
+    state.toolMsg=`open all web UIs: ${result.detail||result.status||'done'}`
+    state.toolMsgLevel=result.level || (result.status==='error'?'critical':result.status==='skipped'?'low':'ok')
+    renderToolManager()
+  } catch(e) { state.toolMsg=e.message; state.toolMsgLevel='critical'; renderToolManager() }
+}
+
 async function syncInstalledDb() {
   try {
     const result=await api('/api/tools/installed/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})})
@@ -856,6 +866,7 @@ function renderToolManager() {
       <button class="btn" data-bulk="dast">Install DAST tools</button>
       <button class="btn" id="sync-db">Sync installed DB</button>
       <button class="btn" data-tool-web="mobsf">Open MobSF</button>
+      <button class="btn" data-open-all-web>Open all web UIs</button>
       <a class="btn" href="/tools/dashboard">Installed software HTML</a>
       <button class="btn" id="refresh-tools">Refresh</button></div>
     <div class="mgrid"><div class="mc"><h3>Jobs (${jobs.length})</h3><div id="jobs">${jobsHtml()}</div></div>
@@ -874,6 +885,7 @@ function renderToolManager() {
       <div class="tool-controls">
         <input id="tool-search" type="search" placeholder="Find a tool…" value="${esc(state.toolQuery)}" aria-label="Find a tool" autocomplete="off">
         ${[{id:'all',icon:'▦',title:'All',count:tools.length},...(c.groups||[])].map(g=>`<button class="tool-filter ${state.toolGroup===g.id?'active':''}" data-tool-group="${esc(g.id)}" title="${esc(g.title)}"><span aria-hidden="true">${esc(g.icon||'•')}</span> ${esc(g.title)} <span class="muted">${g.count??''}</span></button>`).join('')}
+        <button class="tool-filter" data-open-all-web title="Open every configured web UI through the gated launcher">Open all web UIs</button>
       </div>
       <div class="tool-groups" id="tool-groups">${toolGroupsHtml()}</div>
       <details class="advanced-table"><summary>Detailed catalog table</summary>
@@ -1142,6 +1154,7 @@ function wire() {
       renderToolGroups(); return
     }
     const web=e.target.closest('[data-tool-web]'); if (web) { openToolWeb(web.dataset.toolWeb); return }
+    if (e.target.closest('[data-open-all-web]')) { openAllWeb(); return }
     if (e.target.closest('#sync-db')) { syncInstalledDb(); return }
     const why=e.target.closest('[data-tool-why]'); if (why) {
       state.toolMsg=why.dataset.reason||'Manual installation required.'

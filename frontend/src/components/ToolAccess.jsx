@@ -96,7 +96,7 @@ function ToolCard({ tool, onStart, onWeb, onMessage }) {
   )
 }
 
-export default function ToolAccess({ tools = [], groups = [], onStart, onWeb, onMessage }) {
+export default function ToolAccess({ tools = [], groups = [], onStart, onWeb, onOpenAll, onMessage }) {
   const [query, setQuery] = useState('')
   const [activeGroup, setActiveGroup] = useState('all')
 
@@ -135,6 +135,16 @@ export default function ToolAccess({ tools = [], groups = [], onStart, onWeb, on
             <span aria-hidden="true">{group.icon || '•'}</span> {group.title} <span className="muted">{group.count ?? ''}</span>
           </button>
         ))}
+        {onOpenAll && (
+          <button
+            type="button"
+            className="tool-filter"
+            title="Open every configured web UI through the gated launcher"
+            onClick={onOpenAll}
+          >
+            Open all web UIs
+          </button>
+        )}
       </div>
       <div className="tool-groups">
         {visibleGroups.map((group) => {

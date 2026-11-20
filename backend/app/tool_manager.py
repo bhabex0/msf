@@ -809,6 +809,42 @@ def open_web_ui(tool_id: str) -> dict[str, Any]:
         return with_install_state({"status": "error", "url": url, "detail": f"{type(exc).__name__}: {exc}"}, tool_id)
 
 
+def open_all_web_uis() -> dict[str, Any]:
+    """Open every configured tool web UI through the existing gated launcher.
+
+    This never starts an external service or guesses a URL. Tools without an
+    explicit configured URL are reported as skipped so the UI can show why.
+    """
+    tool_ids = [spec.id for spec in TOOL_SPECS if spec.id in WEB_URL_SETTINGS]
+    results: list[dict[str, Any]] = []
+    for tool_id in tool_ids:
+        result = open_web_ui(tool_id)
+        results.append({
+            "tool": tool_id,
+            "name": SPEC_BY_ID[tool_id].name,
+            **result,
+        })
+
+    launched = [r for r in results if r.get("status") in ("launched", "opened", "ok")]
+    skipped = [r for r in results if r.get("status") == "skipped"]
+    errors = [r for r in results if r.get("status") == "error"]
+    status = "launched" if launched else "error" if errors else "skipped"
+    detail = f"{len(launched)}/{len(results)} configured web UIs opened."
+    if skipped:
+        detail += f" {len(skipped)} skipped (no URL or browser gate)."
+    if errors:
+        detail += f" {len(errors)} errors."
+    return {
+        "status": status,
+        "detail": detail,
+        "launched": len(launched),
+        "skipped": len(skipped),
+        "errors": len(errors),
+        "results": results,
+        "note": "URLs do not start services. Web UI launching stays gated by APKPT_BROWSER_OPEN=1.",
+    }
+
+
 def installed_inventory(limit: int = 200) -> list[dict[str, Any]]:
     """Return the local installed-software inventory."""
     installed_db.ensure()
@@ -1137,7 +1173,7 @@ table{{font-size:11.5px}}th,td{{padding:7px 10px}}th{{font-family:var(--mono);fo
 <div class="rhead"><div><div class="eyebrow" style="color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.12em">Local inventory</div>
 <h1 style="margin:4px 0 8px">Installed software dashboard</h1>
 <div class="muted small">SQLite: <span class="mono">{e(str(installed_db.db_path()))}</span> · {len(records)} recorded tool(s)</div></div>
-<div><a class="btn" href="/">← Platform dashboard</a> <button class="btn primary" type="button" onclick="syncDb()">Sync catalog</button> <button class="btn" type="button" onclick="openWeb('mobsf')">Open MobSF</button></div></div>
+<div><a class="btn" href="/">← Platform dashboard</a> <button class="btn primary" type="button" onclick="syncDb()">Sync catalog</button> <button class="btn" type="button" onclick="openWeb('mobsf')">Open MobSF</button> <button class="btn" type="button" onclick="openAllWeb()">Open all web UIs</button></div></div>
 <div id="message" class="banner" style="display:none"></div>
 <div class="auto-term" id="auto-term" role="region" aria-label="Live tool job terminal" aria-live="polite">
   <div class="at-head">
@@ -1156,6 +1192,7 @@ table{{font-size:11.5px}}th,td{{padding:7px 10px}}th{{font-family:var(--mono);fo
   <div class="tool-controls">
     <input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" autocomplete="off" oninput="filterTools()">
     {"".join(group_filters)}
+    <button class="tool-filter" type="button" onclick="openAllWeb()">Open all web UIs</button>
   </div>
   <div class="tool-groups" id="tool-groups">{"".join(tool_sections)}</div>
 </div>
@@ -1258,6 +1295,13 @@ async function openWeb(id) {{
     const lvl = r.status === 'error' ? 'critical' : r.status === 'skipped' ? 'low' : 'ok';
     const install = typeof r.installed === 'boolean' ? (r.installed ? 'installed' : 'not installed') + ' · ' : '';
     show((r.status || 'done') + ': ' + install + (r.detail || r.url || 'ok'), false, lvl);
+  }} catch (e) {{ show(e.message, true); }}
+}}
+async function openAllWeb() {{
+  try {{
+    const r = await post('/api/tools/web/all');
+    const lvl = r.status === 'error' ? 'critical' : r.status === 'skipped' ? 'low' : 'ok';
+    show('Open all web UIs: ' + (r.detail || 'done'), false, lvl);
   }} catch (e) {{ show(e.message, true); }}
 }}
 async function syncDb() {{
@@ -1533,6 +1577,13 @@ def _pki_command_path(spec: ToolSpec) -> str:
             Path(os.getenv("LOCALAPPDATA") or "") / "Programs" / "OpenSSL-Win64" / "bin",
         ):
             candidate = root / "openssl.exe"
+            if candidate.is_file():
+                return str(candidate)
+    if spec.id == "apksigner":
+        name = "apksigner.bat" if os.name == "nt" else "apksigner"
+        build_tools = Path(config.ANDROID_SDK_ROOT) / "build-tools"
+        for version_dir in sorted(build_tools.glob("*"), reverse=True):
+            candidate = version_dir / name
             if candidate.is_file():
                 return str(candidate)
     return ""
@@ -2144,6 +2195,7 @@ SHELL_HELP = """Shell commands (allowlisted — no arbitrary OS shell):
   <tool> pull           pull one Git-backed tool
   <tool> verify         verify one tool's official source
   open <tool>           open a configured web UI (gated)
+  open all              open every configured web UI (gated)
   clear                 clear this terminal
 
 Examples:
@@ -2152,8 +2204,9 @@ Examples:
   platform-tools update
   install all
   open mobsf
+  open all
 
-Type 'catalog' in the shell or tool manager to see tool IDs. Manual/licensed tools stay manual.
+Type 'catalog' in the shell or tool manager to see tool IDs. 'start <tool>' is intentionally rejected; tools are never launched automatically. Manual/licensed tools stay manual.
 For authorized security testing only."""
 
 
@@ -2185,6 +2238,10 @@ def parse_shell_command(command: str) -> dict[str, Any]:
         return {"kind": "jobs"}
     if parts in (["sync"], ["sync", "db"], ["sync", "database"]):
         return {"kind": "sync"}
+    if parts == ["catalog"]:
+        return {"kind": "catalog"}
+    if parts in (["open", "all"], ["all", "open"], ["openall"], ["web", "all"]):
+        return {"kind": "web_all"}
 
     if len(parts) == 2:
         first, second = parts
@@ -2200,6 +2257,16 @@ def parse_shell_command(command: str) -> dict[str, Any]:
             return {"kind": "job", "tool_id": "dast", "action": second if first == "dast" else first}
         if first == "open":
             return {"kind": "web", "tool_id": _shell_tool_id(second)}
+        if first in ("start", "launch", "run", "exec") and _shell_tool_id(second) in SPEC_BY_ID:
+            tool_id = _shell_tool_id(second)
+            return {
+                "kind": "error",
+                "detail": (
+                    f"'{first} {second}' is not allowed. Tools are never launched automatically. "
+                    f"Use '{tool_id} verify' for source checks or 'open {tool_id}' for a configured "
+                    "web UI. Emulator launch and device/radio actions stay separately gated and manual."
+                ),
+            }
         if second == "catalog":
             return {"kind": "catalog"}
         first_tool = _shell_tool_id(first)
@@ -2208,6 +2275,20 @@ def parse_shell_command(command: str) -> dict[str, Any]:
             return {"kind": "job", "tool_id": first_tool, "action": second}
         if second_tool in SPEC_BY_ID and first in _ACTIONS:
             return {"kind": "job", "tool_id": second_tool, "action": first}
+
+    if len(parts) == 1:
+        tool_id = _shell_tool_id(parts[0])
+        spec = SPEC_BY_ID.get(tool_id)
+        if spec:
+            return {
+                "kind": "error",
+                "detail": (
+                    f"'{parts[0]}' is a catalog tool ({spec.name}). "
+                    f"Use '{tool_id} install', '{tool_id} verify', or 'open {tool_id}' "
+                    "for a configured web UI. Tools are never launched automatically; "
+                    "device/radio tools stay manual."
+                ),
+            }
 
     return {"kind": "error", "detail": f"unknown command: {text}\nType 'help' for allowed commands."}
 

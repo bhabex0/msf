@@ -912,10 +912,23 @@ class AdvancedFeatureTests(unittest.TestCase):
                 self.assertEqual(mobsf_web.status_code, 200)
                 self.assertIn("installed", mobsf_web.json())
                 self.assertIn("Local install check", mobsf_web.json()["detail"])
+                web_all = client.post("/api/tools/web/all", json={"confirm": True})
+                self.assertEqual(web_all.status_code, 200)
+                self.assertEqual(web_all.json()["status"], "skipped")
+                self.assertEqual(len(web_all.json()["results"]), 4)
+                self.assertEqual(client.post("/api/tools/web/all", json={"confirm": False}).status_code, 400)
                 shell_help = client.post("/api/tools/shell", json={"command": "help", "confirm": True})
                 self.assertEqual(shell_help.status_code, 200)
                 self.assertIn("apktool install", shell_help.json()["output"])
+                self.assertIn("open all", shell_help.json()["output"])
                 self.assertEqual(shell_help.json()["level"], "info")
+                shell_all = client.post("/api/tools/shell", json={"command": "open all", "confirm": True})
+                self.assertEqual(shell_all.status_code, 200)
+                self.assertIn("open all:", shell_all.json()["output"])
+                self.assertIn("mobsf:", shell_all.json()["output"])
+                start_tool = client.post("/api/tools/shell", json={"command": "start trashdroid", "confirm": True})
+                self.assertEqual(start_tool.status_code, 400)
+                self.assertIn("never launched automatically", start_tool.json()["detail"])
                 self.assertEqual(client.post("/api/tools/shell", json={"command": "rm -rf /"}).status_code, 400)
                 self.assertEqual(client.post(
                     "/api/tools/shell", json={"command": "apktool install", "confirm": False}
@@ -935,6 +948,7 @@ class AdvancedFeatureTests(unittest.TestCase):
                 self.assertIn("Live tool job terminal", dashboard.text)
                 self.assertIn("showAutoTerm", dashboard.text)
                 self.assertIn("closes automatically when the job finishes", dashboard.text)
+                self.assertIn("Open all web UIs", dashboard.text)
                 self.assertIn("backdrop-filter", dashboard.text)
                 main_page = client.get("/")
                 self.assertEqual(main_page.status_code, 200)
@@ -993,12 +1007,18 @@ class AdvancedFeatureTests(unittest.TestCase):
                 self.assertIn('data-group="decode"', page)
                 self.assertIn("tool-card", page)
                 self.assertIn("runToolAction", page)
+                self.assertIn("Open all web UIs", page)
                 blocked = tool_manager.open_web_ui("zaproxy")
                 self.assertEqual(blocked["status"], "skipped")
                 self.assertIn("APKPT_BROWSER_OPEN", blocked["detail"])
                 mobsf = tool_manager.open_web_ui("mobsf")
                 self.assertEqual(mobsf["status"], "skipped")
                 self.assertIn("APKPT_MOBSF_URL", mobsf["detail"])
+                all_web = tool_manager.open_all_web_uis()
+                self.assertEqual(all_web["status"], "skipped")
+                self.assertEqual(all_web["launched"], 0)
+                self.assertEqual({item["tool"] for item in all_web["results"]}, {"mobsf", "apkhunt", "rms", "zaproxy"})
+                self.assertIn("APKPT_BROWSER_OPEN", all_web["note"])
 
     def test_shell_command_parser_is_allowlisted(self):
         help_plan = tool_manager.parse_shell_command("  help  ")
@@ -1019,6 +1039,18 @@ class AdvancedFeatureTests(unittest.TestCase):
 
         web = tool_manager.parse_shell_command("open mobsf")
         self.assertEqual(web, {"kind": "web", "tool_id": "mobsf"})
+
+        web_all = tool_manager.parse_shell_command("OPEN ALL")
+        self.assertEqual(web_all, {"kind": "web_all"})
+
+        tool_only = tool_manager.parse_shell_command("trashdroid")
+        self.assertEqual(tool_only["kind"], "error")
+        self.assertIn("catalog tool", tool_only["detail"])
+        self.assertIn("open trashdroid", tool_only["detail"])
+
+        start_tool = tool_manager.parse_shell_command("start trashdroid")
+        self.assertEqual(start_tool["kind"], "error")
+        self.assertIn("never launched automatically", start_tool["detail"])
 
         for dangerous in ("rm -rf /", "powershell -c whoami", "apktool install && calc", ""):
             self.assertEqual(tool_manager.parse_shell_command(dangerous)["kind"], "error")

@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -228,6 +228,18 @@ def sync_installed_tools(
     return summary
 
 
+@app.post("/api/tools/web/all")
+def open_all_tool_web(
+    payload: ToolActionRequest | None = Body(None),
+    actor: str = Depends(auth.require_auth),
+) -> dict:
+    if payload is not None and not payload.confirm:
+        raise HTTPException(400, "web UI launch was not confirmed")
+    result = tool_manager.open_all_web_uis()
+    auth.audit("tools.open_web_all", {"status": result.get("status")}, actor)
+    return result
+
+
 @app.post("/api/tools/web/{tool_id}")
 def open_tool_web(
     tool_id: str,
@@ -300,6 +312,22 @@ def tool_shell(payload: ShellRequest, actor: str = Depends(auth.require_auth)) -
         output = f"{plan['tool_id']}: {result.get('status')} {result.get('detail') or result.get('url') or ''}".strip()
         level = "low" if result.get("status") == "skipped" else "ok" if result.get("status") in ("ok", "opened") else "high"
         return {"status": result.get("status", "ok"), "level": level, "output": output}
+    if kind == "web_all":
+        result = tool_manager.open_all_web_uis()
+        lines = [
+            f"{item.get('tool')}: {item.get('status')} "
+            f"{item.get('detail') or item.get('url') or ''}".strip()
+            for item in result.get("results", [])
+        ]
+        output = f"open all: {result.get('detail', '')}\n" + "\n".join(lines)
+        level = "ok" if result.get("launched") else "high" if result.get("errors") else "low"
+        return {
+            "status": result.get("status", "skipped"),
+            "level": level,
+            "output": output,
+            "detail": result.get("detail", ""),
+            "results": result.get("results", []),
+        }
     if kind == "job":
         try:
             job = tool_manager.MANAGER.submit(plan["tool_id"], plan["action"], actor)

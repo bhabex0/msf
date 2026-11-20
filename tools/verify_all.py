@@ -323,6 +323,11 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         }, f"iteration {index}: shell did not map the DAST toolchain job", failures)
         require(tool_manager.parse_shell_command("rm -rf /")["kind"] == "error",
                 f"iteration {index}: shell accepted an arbitrary command", failures)
+        require(tool_manager.parse_shell_command("open all") == {"kind": "web_all"},
+                f"iteration {index}: shell did not expose open all", failures)
+        start_tool = tool_manager.parse_shell_command("start trashdroid")
+        require(start_tool["kind"] == "error" and "never launched automatically" in start_tool["detail"],
+                f"iteration {index}: shell allowed an automatic tool launch", failures)
         log_samples = {
             "Downloading official release": "work",
             "Installed apktool 2.9.0": "ok",
@@ -350,14 +355,19 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
             manager_job = tool_manager.MANAGER.submit("apktool", "install", "verifier")
             require(manager_job.status == "skipped",
                     f"iteration {index}: tool-manager install was not gated", failures)
+            all_web = tool_manager.open_all_web_uis()
+            require(all_web["status"] == "skipped" and all_web["launched"] == 0
+                    and {item["tool"] for item in all_web["results"]} == {"mobsf", "apkhunt", "rms", "zaproxy"},
+                    f"iteration {index}: open all web UIs was not gated or incomplete", failures)
             dashboard_page = tool_manager.installed_dashboard_html()
         require("For authorized security testing only" in dashboard_page,
                 f"iteration {index}: installed dashboard authorization notice missing", failures)
         require("Installed software dashboard" in dashboard_page,
                 f"iteration {index}: installed dashboard title missing", failures)
         require("Tool access" in dashboard_page and 'data-group="decode"' in dashboard_page
-                and "tool-card" in dashboard_page and "runToolAction" in dashboard_page,
-                f"iteration {index}: grouped tool access missing from installed dashboard", failures)
+                and "tool-card" in dashboard_page and "runToolAction" in dashboard_page
+                and "Open all web UIs" in dashboard_page,
+                f"iteration {index}: grouped tool access or open all missing from installed dashboard", failures)
 
         all_findings += pki["findings"]
         all_findings += bluetooth["findings"]
@@ -519,13 +529,16 @@ def main() -> int:
     react_css = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
     react_shell = (ROOT / "frontend" / "src" / "components" / "MiniShell.jsx").read_text(encoding="utf-8")
     react_sequence = (ROOT / "frontend" / "src" / "components" / "SequenceRail.jsx").read_text(encoding="utf-8")
-    require(all(token in static_ui for token in ("seq-rail", "sec-head", "backdrop-filter", "pointerdown", "click outside hides")),
-            "static UI is missing the cyber glass sequence or shell behaviour", failures)
+    react_manager = (ROOT / "frontend" / "src" / "components" / "ToolManager.jsx").read_text(encoding="utf-8")
+    require(all(token in static_ui for token in ("seq-rail", "sec-head", "backdrop-filter", "pointerdown", "click outside hides", "open all", "data-open-all-web")),
+            "static UI is missing the cyber glass sequence, shell behaviour or open all action", failures)
     require(all(token in react_css for token in ("--glass", ".seq-rail", "counter-reset: tabno", "@supports not")),
             "React UI is missing the cyber glass tokens or numbered tabs", failures)
     require(all(token in react_shell for token in ("pointerdown", "shellRootRef", "click outside hides"))
             and "seq-step" in react_sequence,
             "React shell auto-hide or sequence rail is missing", failures)
+    require("openAllWeb" in react_manager and "Open all web UIs" in react_manager,
+            "React tool manager is missing the open all web UIs action", failures)
     java_exe = tool_manager._java_executable()
     if java_exe:
         java_env = tool_manager._subprocess_environment()
