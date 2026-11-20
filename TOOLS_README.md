@@ -860,4 +860,39 @@ Before any action:
 
 ---
 
+## Reusable cross-platform pentest agent
+
+`tools/mobile_pentest_agent.py` is a safe-by-default, evidence-first wrapper around curated Android, Windows and Linux checks. It records every step — including skipped, blocked and not-testable rows — writes stdout/stderr evidence files, redacts credential-shaped values, and can emit JSON, Markdown, HTML, CSV and PDF reports. PDF support is lazily imported, so collection still works without ReportLab.
+
+```powershell
+# Master to-do list (50 Android / Windows / Linux checks)
+python tools/mobile_pentest_agent.py checklist --out .\evidence\agent --format md,json
+
+# Read-only host inventory on the current platform
+python tools/mobile_pentest_agent.py collect --profile auto --out .\evidence\agent
+
+# Android static + runtime defaults; invasive/network steps stay skipped unless opted in
+python tools\mobile_pentest_agent.py collect --profile android --out .\evidence\agent `
+  --target .\app.apk --package com.example.app --serial emulator-5554 `
+  --hooks .\hooks.js
+
+# Opt in only in an authorized lab
+python tools\mobile_pentest_agent.py collect --profile android --out .\evidence\agent `
+  --target .\app.apk --package com.example.app --serial emulator-5554 `
+  --hooks .\hooks.js --allow-invasive --allow-network
+
+# Multi-format report from normalized engagement JSON
+python tools\mobile_pentest_agent.py report --input .\report_input.json --out .\ `
+  --format json,md,html,pdf,csv
+```
+
+Safety behavior:
+
+- no collector installs a CA on a real device, performs OTA radio capture, changes pairing/bonding, flashes firmware or touches bootloader/BIOS settings;
+- `--allow-invasive` gates backup attempts, Frida hooks, Drozer invocation and bounded `tcpdump`; `--allow-network` gates proxy/capture steps; `--allow-ca-install` only records consent — installation remains a manual, explicitly authorized action;
+- missing tools, missing configuration, timeouts and ungated steps appear in `agent_evidence/manifest.json` instead of being silently dropped;
+- generated reports carry the authorization notice in the header and PDF page footer.
+
+---
+
 **For authorized security testing only.**

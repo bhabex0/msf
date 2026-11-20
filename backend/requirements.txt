@@ -7,3 +7,4 @@ cryptography>=42.0,<45.0
 
 # Optional (used only when installed / configured):
 # apktool, jadx, adb (platform-tools), frida-tools, MobSF
+reportlab>=4.0,<7.0  # PDF report export only; imported lazily by tools/pentest_agent/report.py

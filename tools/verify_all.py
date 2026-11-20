@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -35,7 +34,7 @@ from app.scanner.advanced import analyze_advanced  # noqa: E402
 from app.scanner.apk import ApkPackage, find_all  # noqa: E402
 from app.scanner.bluetooth import analyze_bluetooth, bluetooth_lab_status  # noqa: E402
 from app.scanner.custom import load_custom_rules, run_custom_rules  # noqa: E402
-from app.scanner.dast import DastResult, run_dast  # noqa: E402
+from app.scanner.dast import DastResult  # noqa: E402
 from app.scanner.exports import cyclonedx_sbom, diff_scans, sarif_report, save_exports  # noqa: E402
 from app.scanner.lab import (  # noqa: E402
     adb_command,
@@ -416,14 +415,14 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         require(live_checks and live_checks[0]["status"] == "skipped",
                 f"iteration {index}: live checks should be skipped", failures)
 
-        if shutil.which("adb"):
-            dast = DastResult(status="skipped", checks=[{
-                "name": "device_availability", "status": "skipped",
-                "detail": "Verification skipped DAST to avoid installing on a connected device.",
-                "evidence": "",
-            }])
-        else:
-            dast = run_dast(apk_path, summary, work, network_config=network_config)
+        # Verification must never install an app on a connected device. The bundled
+        # SDK adb is resolvable even when adb is absent from PATH, so always stub
+        # DAST instead of calling run_dast here.
+        dast = DastResult(status="skipped", checks=[{
+            "name": "device_availability", "status": "skipped",
+            "detail": "Verification skipped DAST to avoid installing on a connected device.",
+            "evidence": "",
+        }])
         require(dast.status in ("skipped", "not_run"),
                 f"iteration {index}: unexpected DAST status {dast.status}", failures)
 
