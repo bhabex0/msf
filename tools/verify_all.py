@@ -223,7 +223,7 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         require(lab_status["launch_gated"] is True and "paths" in lab_status,
                 f"iteration {index}: emulator readiness/plan missing from lab status", failures)
         require([step["name"] for step in lab_status["dast_plan"]] == [
-            "create_avd", "launch_avd", "verify_adb", "run_dast", "teardown",
+            "create_avd", "install_dast_tools", "launch_avd", "verify_adb", "run_dast", "teardown",
         ], f"iteration {index}: emulator DAST plan is incomplete", failures)
         with tempfile.TemporaryDirectory() as adb_tmp:
             sdk_adb_root = Path(adb_tmp) / "android-sdk"
@@ -254,6 +254,28 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         require(all(manager_tools[name]["manual"] and manager_tools[name]["actions"] == ["verify"]
                     for name in ("bluetoothctl", "hcitool", "nrfutil")),
                 f"iteration {index}: Bluetooth catalog tools are not manual/verify-only", failures)
+        host_dast_tools = ("drozer", "androguard", "apkid", "qark")
+        require(tuple(tool_manager.DAST_TOOL_IDS) == host_dast_tools
+                and all(name in manager_tools and not manager_tools[name]["manual"]
+                        for name in host_dast_tools),
+                f"iteration {index}: host DAST toolchain catalog entries missing", failures)
+        manual_mobile_tools = (
+            "ghidra", "radare2", "class-dump", "internalblue", "ubertooth",
+            "nrf-sniffer", "aircrack-ng", "bettercap", "kismet", "hcxtools",
+            "wireshark", "ipsw", "ios-deploy", "libimobiledevice", "binwalk",
+            "unblob", "uefitool", "chipsec", "flashrom", "fwupd", "u-boot", "hashcat",
+        )
+        require(all(name in manager_tools and manager_tools[name]["manual"]
+                    and manager_tools[name]["actions"] == ["verify"]
+                    for name in manual_mobile_tools),
+                f"iteration {index}: mobile/radio/firmware tools are not manual/verify-only", failures)
+        require(all(manager_tools[name]["group"] == "root"
+                    for name in ("binwalk", "unblob", "uefitool", "chipsec",
+                                 "flashrom", "fwupd", "u-boot", "hashcat")),
+                f"iteration {index}: firmware/BIOS tools are not in the manual root lab", failures)
+        require(all(manager_tools[name]["invasive"] for name in (
+            "internalblue", "ubertooth", "aircrack-ng", "bettercap", "chipsec", "flashrom",
+        )), f"iteration {index}: invasive mobile tools are not labelled", failures)
         require("pki" in manager_catalog and "device_installation" in manager_catalog["pki"],
                 f"iteration {index}: PKI lab status missing from catalog", failures)
         require(all("installable" in t and "install_block_reason" in t for t in manager_tools.values()),
@@ -265,7 +287,7 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
                 f"iteration {index}: installed tools still expose Install", failures)
         if sys.version_info >= (3, 15):
             require(all(not manager_tools[name]["installable"]
-                        for name in ("semgrep", "mobsf")),
+                        for name in ("semgrep", "mobsf", "drozer", "androguard")),
                     f"iteration {index}: unsupported pip tools remain auto-installable", failures)
         require("authorized security testing only" in manager_catalog["disclaimer"].lower(),
                 f"iteration {index}: tool-manager authorization notice missing", failures)
@@ -289,6 +311,9 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
         shell_plan = tool_manager.parse_shell_command("apktool install")
         require(shell_plan == {"kind": "job", "tool_id": "apktool", "action": "install"},
                 f"iteration {index}: shell command parser did not map install", failures)
+        require(tool_manager.parse_shell_command("dast install") == {
+            "kind": "job", "tool_id": "dast", "action": "install",
+        }, f"iteration {index}: shell did not map the DAST toolchain job", failures)
         require(tool_manager.parse_shell_command("rm -rf /")["kind"] == "error",
                 f"iteration {index}: shell accepted an arbitrary command", failures)
         log_samples = {

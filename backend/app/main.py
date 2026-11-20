@@ -393,6 +393,21 @@ def install_emulator_tools(
     return job.to_dict()
 
 
+@app.post("/api/tools/dast/{action}")
+def dast_toolchain_action(
+    action: str,
+    payload: ToolActionRequest | None = Body(None),
+    actor: str = Depends(auth.require_auth),
+) -> dict:
+    if action not in {"install", "update", "verify"}:
+        raise HTTPException(400, f"unsupported DAST toolchain action: {action}")
+    if payload is not None and not payload.confirm:
+        raise HTTPException(400, "DAST toolchain action was not confirmed")
+    job = tool_manager.MANAGER.submit("dast", action, actor)
+    auth.audit("tools.dast_toolchain", {"action": action, "job_id": job.job_id, "status": job.status}, actor)
+    return job.to_dict()
+
+
 @app.post("/api/tools/{tool_id}/{action}")
 def tool_action(
     tool_id: str,

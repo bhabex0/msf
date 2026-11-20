@@ -755,6 +755,7 @@ function renderToolManager() {
       <button class="btn" data-bulk="update-all">Update all</button>
       <button class="btn" data-bulk="verify">Verify all sources</button>
       <button class="btn" data-bulk="emulator">Install emulator</button>
+      <button class="btn" data-bulk="dast">Install DAST tools</button>
       <button class="btn" id="sync-db">Sync installed DB</button>
       <button class="btn" data-tool-web="mobsf">Open MobSF</button>
       <a class="btn" href="/tools/dashboard">Installed software HTML</a>
@@ -1026,7 +1027,7 @@ function wire() {
     if (e.target.closest('#refresh-tools')) { loadToolManager(); return }
     const bulk=e.target.closest('[data-bulk]'); if (bulk) {
       const k=bulk.dataset.bulk
-      const path=k==='emulator'?'/api/tools/emulator/install':k==='verify'?'/api/tools/all/verify_all':`/api/tools/${k}`
+      const path=k==='emulator'?'/api/tools/emulator/install':k==='dast'?'/api/tools/dast/install':k==='verify'?'/api/tools/all/verify_all':`/api/tools/${k}`
       startToolJob(path,k.replace(/-/g,' ')); return
     }
     const groupBtn=e.target.closest('[data-tool-group]'); if (groupBtn) {

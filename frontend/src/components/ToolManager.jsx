@@ -150,6 +150,7 @@ export default function ToolManager() {
         <button className="btn" onClick={() => start('/api/tools/update-all', 'update all')}>Update all</button>
         <button className="btn" onClick={() => start('/api/tools/all/verify_all', 'verify all')}>Verify sources</button>
         <button className="btn" onClick={() => start('/api/tools/emulator/install', 'emulator')}>Install emulator</button>
+        <button className="btn" onClick={() => start('/api/tools/dast/install', 'dast')}>Install DAST tools</button>
         <button className="btn" onClick={syncDb}>Sync installed DB</button>
         <button className="btn" onClick={() => openWeb('mobsf')}>Open MobSF</button>
         <a className="btn" href="/tools/dashboard">Installed software HTML</a>

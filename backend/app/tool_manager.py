@@ -176,6 +176,42 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         install_note="Python dependencies and an authorized device/emulator are required.",
     ),
     ToolSpec(
+        id="drozer", name="drozer", category="dynamic", method="pip",
+        description="Android IPC attack-surface framework (OWASP MASTG-TOOL-0015).",
+        source_url="https://pypi.org/project/drozer/",
+        homepage="https://github.com/ReversecLabs/drozer",
+        package="drozer", command="drozer",
+        install_note=(
+            "Installs the host console only. The agent APK is never installed automatically: "
+            "install it manually on an owned device/emulator, then connect explicitly. "
+            "Windows hosts should use Docker/WSL. On Python 3.15, upstream PyYAML "
+            "builds need MSVC build tools; use Python 3.10-3.14 for the pip install."
+        ),
+    ),
+    ToolSpec(
+        id="androguard", name="Androguard", category="static", method="pip",
+        description="Android reverse-engineering and static-analysis Python toolkit.",
+        source_url="https://pypi.org/project/androguard/",
+        homepage="https://github.com/androguard/androguard",
+        package="androguard", command="androguard",
+        install_note="On Python 3.15, upstream PyYAML builds need MSVC build tools; use Python 3.10-3.14.",
+    ),
+    ToolSpec(
+        id="apkid", name="APKiD", category="static", method="pip",
+        description="Detects Android packers, obfuscators and compilers (MASTG-TOOL-0009).",
+        source_url="https://pypi.org/project/apkid/",
+        homepage="https://github.com/rednaga/APKiD",
+        package="apkid", command="apkid",
+        install_note="A Java runtime is required for DEX analysis.",
+    ),
+    ToolSpec(
+        id="qark", name="QARK", category="static", method="pip",
+        description="LinkedIn Android static analyser with proof-of-concept generation.",
+        source_url="https://pypi.org/project/qark/",
+        homepage="https://github.com/linkedin/qark",
+        package="qark", command="qark",
+    ),
+    ToolSpec(
         id="rms", name="Runtime Mobile Security (RMS)", category="runtime",
         method="git", description="Frida-based runtime manipulation web interface.",
         source_url="https://github.com/m0bilesecurity/RMS-Runtime-Mobile-Security.git",
@@ -263,6 +299,164 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         command="chromium",
         install_note="Install through your OS package manager; set APKPT_CHROMIUM_CMD if needed.",
     ),
+    # ---------------------------------------------------------------- reverse engineering
+    ToolSpec(
+        id="ghidra", name="Ghidra", category="reverse", method="manual", manual=True,
+        description="NSA reverse-engineering suite for native and firmware binaries (MASTG-TOOL-0033).",
+        source_url="https://github.com/NationalSecurityAgency/ghidra",
+        homepage="https://ghidra-sre.org/",
+        install_note="Manual install of the official release; requires a JDK. Offline analysis of owned binaries only.",
+    ),
+    ToolSpec(
+        id="radare2", name="radare2 / r2frida", category="reverse", method="manual", manual=True,
+        description="Reverse-engineering framework for Android/iOS binaries (MASTG-TOOL-0028/0036).",
+        source_url="https://github.com/radareorg/radare2",
+        homepage="https://rada.re/",
+        install_note="Install from upstream releases. r2frida additionally requires Frida.",
+    ),
+    ToolSpec(
+        id="class-dump", name="class-dump", category="reverse", method="manual", manual=True,
+        description="Dumps Objective-C class interfaces from iOS Mach-O binaries.",
+        source_url="https://github.com/nygard/class-dump",
+        homepage="https://github.com/nygard/class-dump",
+        install_note="Install manually; analyse only applications you own or are authorized to test.",
+    ),
+    # ---------------------------------------------------------------- Bluetooth / BLE / Wi-Fi
+    ToolSpec(
+        id="internalblue", name="InternalBlue", category="device", method="manual", manual=True,
+        invasive=True, description="Broadcom/Cypress Bluetooth firmware experimentation framework (SEEMOO).",
+        source_url="https://github.com/seemoo-lab/InternalBlue",
+        homepage="https://github.com/seemoo-lab/InternalBlue",
+        install_note="Requires compatible Broadcom/Cypress hardware and a lab device. Firmware patching can change radio behaviour; never use on third-party devices.",
+    ),
+    ToolSpec(
+        id="ubertooth", name="Ubertooth One", category="device", method="manual", manual=True,
+        invasive=True, description="Open-source 2.4 GHz wireless sniffer for Bluetooth research.",
+        source_url="https://github.com/greatscottgadgets/ubertooth",
+        homepage="https://ubertooth.readthedocs.io/",
+        install_note="Hardware tool; passive monitoring only in an authorized RF lab. The platform never drives it automatically.",
+    ),
+    ToolSpec(
+        id="nrf-sniffer", name="nRF Sniffer for BLE", category="device", method="manual", manual=True,
+        description="Nordic Semiconductor BLE packet sniffer for Wireshark.",
+        source_url="https://www.nordicsemi.com/Products/Development-tools/nRF-Sniffer-for-Bluetooth-LE",
+        homepage="https://www.nordicsemi.com/",
+        install_note="Install the official Nordic tool and hardware. Passive capture only; never scan or modify devices from this platform.",
+    ),
+    ToolSpec(
+        id="aircrack-ng", name="Aircrack-ng", category="device", method="manual", manual=True,
+        invasive=True, description="Wi-Fi security audit suite (monitor, capture, injection, WEP/WPA analysis).",
+        source_url="https://github.com/aircrack-ng/aircrack-ng",
+        homepage="https://www.aircrack-ng.org/",
+        install_note="Manual install for owned RF labs only. Injection/deauthentication can disrupt networks; the platform never runs these workflows.",
+    ),
+    ToolSpec(
+        id="bettercap", name="Bettercap", category="device", method="manual", manual=True,
+        invasive=True, description="Wi-Fi, BLE, HID and network reconnaissance/MITM framework (MASTG-TOOL-0076).",
+        source_url="https://github.com/bettercap/bettercap",
+        homepage="https://www.bettercap.org/",
+        install_note="Manual, scoped lab use only. Active radio and MITM modules are never invoked by this platform.",
+    ),
+    ToolSpec(
+        id="kismet", name="Kismet", category="device", method="manual", manual=True,
+        description="Passive wireless network detector, sniffer and WIDS.",
+        source_url="https://github.com/kismetwireless/kismet",
+        homepage="https://www.kismetwireless.net/",
+        install_note="Manual install; passive monitoring in authorized environments only.",
+    ),
+    ToolSpec(
+        id="hcxtools", name="hcxtools", category="device", method="manual", manual=True,
+        description="Tools converting wireless captures to hash formats for offline auditing.",
+        source_url="https://github.com/ZerBea/hcxtools",
+        homepage="https://github.com/ZerBea/hcxtools",
+        install_note="Manual install; handle captured data as sensitive and stay within scope.",
+    ),
+    ToolSpec(
+        id="wireshark", name="Wireshark / tshark", category="device", method="manual", manual=True,
+        description="Packet dissection and capture analysis (MASTG-TOOL-0081).",
+        source_url="https://github.com/wireshark/wireshark",
+        homepage="https://www.wireshark.org/",
+        install_note="Manual install via official installer. Captured traffic may contain sensitive data.",
+    ),
+    # ---------------------------------------------------------------- iOS device tooling
+    ToolSpec(
+        id="ipsw", name="ipsw", category="device", method="manual", manual=True,
+        description="iOS firmware/ipsw research toolkit (MASTG-TOOL-0105).",
+        source_url="https://github.com/blacktop/ipsw",
+        homepage="https://github.com/blacktop/ipsw",
+        install_note="Manual install; analyse firmware you are authorized to inspect.",
+    ),
+    ToolSpec(
+        id="ios-deploy", name="ios-deploy", category="device", method="manual", manual=True,
+        description="Installs and debugs apps on iOS devices over USB (MASTG-TOOL-0054).",
+        source_url="https://github.com/ios-control/ios-deploy",
+        homepage="https://github.com/ios-control/ios-deploy",
+        install_note="Manual, macOS-only. Installing apps changes device state; requires explicit authorization.",
+    ),
+    ToolSpec(
+        id="libimobiledevice", name="libimobiledevice", category="device", method="manual", manual=True,
+        description="Cross-platform protocol library for iOS devices (MASTG-TOOL-0126).",
+        source_url="https://github.com/libimobiledevice/libimobiledevice",
+        homepage="https://libimobiledevice.org/",
+        install_note="Manual install through the official distribution; authorized devices only.",
+    ),
+    # ---------------------------------------------------------------- firmware / bootloader / BIOS
+    ToolSpec(
+        id="binwalk", name="Binwalk", category="root", method="manual", manual=True,
+        description="Firmware image analysis, carving and extraction.",
+        source_url="https://github.com/ReFirmLabs/binwalk",
+        homepage="https://github.com/ReFirmLabs/binwalk",
+        install_note="Manual install. Analyse firmware you own; extraction writes local files only.",
+    ),
+    ToolSpec(
+        id="unblob", name="unblob", category="root", method="manual", manual=True,
+        description="Fast firmware extraction engine supporting 100+ formats (ONEKEY).",
+        source_url="https://github.com/onekey-sec/unblob",
+        homepage="https://github.com/onekey-sec/unblob",
+        install_note="Manual install; offline extraction of authorized firmware images only.",
+    ),
+    ToolSpec(
+        id="uefitool", name="UEFITool", category="root", method="manual", manual=True,
+        description="UEFI/BIOS firmware image parsing and module extraction.",
+        source_url="https://github.com/LongSoft/UEFITool",
+        homepage="https://github.com/LongSoft/UEFITool",
+        install_note="Manual install; offline analysis only. Never flash modified firmware outside an authorized lab.",
+    ),
+    ToolSpec(
+        id="chipsec", name="CHIPSEC", category="root", method="manual", manual=True,
+        invasive=True, description="Platform/firmware security assessment framework (Intel).",
+        source_url="https://github.com/chipsec/chipsec",
+        homepage="https://chipsec.github.io/",
+        install_note="Manual install only. Requires a kernel driver and hardware access; test systems only, never production hosts.",
+    ),
+    ToolSpec(
+        id="flashrom", name="flashrom", category="root", method="manual", manual=True,
+        invasive=True, description="Identifies, reads, writes and erases SPI flash chips.",
+        source_url="https://github.com/flashrom/flashrom",
+        homepage="https://www.flashrom.org/",
+        install_note="Manual install. Writing/erasing flash can brick hardware; authorized lab hardware only.",
+    ),
+    ToolSpec(
+        id="fwupd", name="fwupd", category="root", method="manual", manual=True,
+        description="Firmware update and integrity baseline tooling (LVFS).",
+        source_url="https://github.com/fwupd/fwupd",
+        homepage="https://fwupd.org/",
+        install_note="Manual install; use read-only version/baseline checks. Do not apply updates from this platform.",
+    ),
+    ToolSpec(
+        id="u-boot", name="U-Boot", category="root", method="manual", manual=True,
+        description="Bootloader source and verified-boot tooling for embedded devices.",
+        source_url="https://github.com/u-boot/u-boot",
+        homepage="https://www.denx.de/wiki/U-Boot",
+        install_note="Manual install/build. Inspect bootloader configuration offline; never replace a bootloader from this platform.",
+    ),
+    ToolSpec(
+        id="hashcat", name="Hashcat", category="root", method="manual", manual=True,
+        description="Offline password/hash auditing for authorized assessments.",
+        source_url="https://github.com/hashcat/hashcat",
+        homepage="https://hashcat.net/hashcat/",
+        install_note="Manual install; use only on hashes from authorized engagements.",
+    ),
 )
 
 SPEC_BY_ID = {spec.id: spec for spec in TOOL_SPECS}
@@ -305,6 +499,14 @@ TOOL_ICONS = {
     "trashdroid": "🤖", "mitmproxy": "🕵️", "zaproxy": "🦎", "burp": "🐝",
     "chromium": "🌐", "apatch": "🔓", "keytool": "🗝️", "openssl": "🧾",
     "bluetoothctl": "📡", "hcitool": "📶", "nrfutil": "🔵",
+    "drozer": "🕳️", "androguard": "🧬", "apkid": "🏷️", "qark": "🧪",
+    "ghidra": "🦾", "radare2": "⚙️", "class-dump": "🍎",
+    "internalblue": "🔵", "ubertooth": "📻", "nrf-sniffer": "📡",
+    "aircrack-ng": "📶", "bettercap": "🛰️", "kismet": "🛎️",
+    "hcxtools": "🔑", "wireshark": "🦈",
+    "ipsw": "📱", "ios-deploy": "🧷", "libimobiledevice": "🔗",
+    "binwalk": "📦", "unblob": "🧩", "uefitool": "🧱", "chipsec": "🛡️",
+    "flashrom": "💾", "fwupd": "⬆️", "u-boot": "🥾", "hashcat": "🔐",
 }
 
 def tool_group(spec: ToolSpec) -> dict[str, Any]:
@@ -323,6 +525,11 @@ def tool_group(spec: ToolSpec) -> dict[str, Any]:
 _ACTIONS = {"install", "update", "pull", "verify"}
 _BATCH_ACTIONS = {"install_all", "update_all", "verify_all"}
 _EMULATOR_ACTIONS = {"install"}
+_DAST_ACTIONS = {"install", "update", "verify"}
+
+# Host-side mobile DAST/SAST CLI tools installed by the dedicated gated job and
+# by the emulator setup job. No device, radio or firmware is touched here.
+DAST_TOOL_IDS: tuple[str, ...] = ("drozer", "androguard", "apkid", "qark")
 DISABLED_MANAGER_DETAIL = (
     "Tool manager is disabled. Set APKPT_TOOL_MANAGER=1 and restart the server."
 )
@@ -1349,7 +1556,7 @@ def _auto_install_block(spec: ToolSpec) -> str:
     # The current official wheels/dependencies for these pip tools do not support
     # Python 3.15 on all hosts. Fail early with a clear reason instead of a long
     # pip traceback full of old wheel metadata and failed source builds.
-    if spec.id in {"semgrep", "mobsf"} and sys.version_info >= (3, 15):
+    if spec.id in {"semgrep", "mobsf", "drozer", "androguard"} and sys.version_info >= (3, 15):
         return (
             f"Auto-install is unavailable on Python {sys.version.split()[0]} / {platform.system()}: "
             "the official package or one of its native dependencies has no compatible wheel for this host yet. "
@@ -1627,6 +1834,37 @@ def _run_tool_action(spec: ToolSpec, action: str, log: Callable[[str], None]) ->
     return {"status": "skipped", "detail": f"Unsupported method: {spec.method}"}
 
 
+def install_dast_toolchain(log: Callable[[str], None], action: str = "install") -> dict[str, Any]:
+    """Install host-side mobile DAST/SAST CLI tools using each spec's safe method.
+
+    This never installs an agent on a device, starts an emulator, opens a
+    browser or touches a radio. Manual/invasive tools are intentionally absent.
+    """
+    log(f"Installing host-side mobile DAST tooling ({', '.join(DAST_TOOL_IDS)}). No device is modified.")
+    results: list[dict[str, Any]] = []
+    for tool_id in DAST_TOOL_IDS:
+        spec = SPEC_BY_ID[tool_id]
+        try:
+            result = _run_tool_action(spec, action, log)
+        except Exception as exc:
+            result = {"status": "error", "detail": f"{type(exc).__name__}: {exc}"[:500]}
+        log(f"dast[{tool_id}]: {result.get('status')} {result.get('detail', '')}".strip())
+        try:
+            record_install(spec, result, "dast")
+        except Exception as exc:
+            log(f"WARNING: inventory update failed for {spec.name}: {type(exc).__name__}: {exc}")
+        results.append({"id": tool_id, "status": result.get("status"), "detail": result.get("detail", "")})
+    installed = sum(1 for item in results if item["status"] in {"installed", "skipped"})
+    return {
+        "status": "completed", "action": action, "installed_or_present": installed,
+        "tools": results,
+        "detail": (
+            f"{installed}/{len(results)} DAST tools installed or already present. "
+            "Device agents and radio tooling remain manual and gated."
+        ),
+    }
+
+
 def install_emulator(log: Callable[[str], None]) -> dict[str, Any]:
     """Create an authorized test AVD using official Android SDK packages."""
     log("Preparing Android SDK command-line tools and an authorized test AVD.")
@@ -1653,9 +1891,14 @@ def install_emulator(log: Callable[[str], None]) -> dict[str, Any]:
     if emulator_bin.exists():
         _wrapper("apkpt-emulator", emulator_bin)
     log(f"AVD '{avd_name}' created. Hardware acceleration and authorization are still required.")
+    try:
+        dast = install_dast_toolchain(log)
+        log(f"Emulator DAST toolchain: {dast['detail']}")
+    except Exception as exc:
+        log(f"WARNING: DAST toolchain setup did not complete: {type(exc).__name__}: {exc}")
     return {
         "status": "installed", "avd": avd_name, "system_image": image,
-        "sdk_root": str(config.ANDROID_SDK_ROOT),
+        "sdk_root": str(config.ANDROID_SDK_ROOT), "dast_toolchain": DAST_TOOL_IDS,
     }
 
 
@@ -1810,6 +2053,7 @@ SHELL_HELP = """Shell commands (allowlisted — no arbitrary OS shell):
   update all            start an update-all job
   verify all            verify official sources without installing
   emulator install      set up the authorized local AVD
+  dast install          install host-side mobile DAST tools (no device changes)
   <tool> install        install one catalog tool
   <tool> update         update one catalog tool
   <tool> pull           pull one Git-backed tool
@@ -1867,6 +2111,8 @@ def parse_shell_command(command: str) -> dict[str, Any]:
             return {"kind": "job", "tool_id": "all", "action": "verify_all"}
         if (first == "emulator" and second == "install") or (first == "install" and second == "emulator"):
             return {"kind": "job", "tool_id": "emulator", "action": "install"}
+        if (first == "dast" and second in _DAST_ACTIONS) or (first in _DAST_ACTIONS and second == "dast"):
+            return {"kind": "job", "tool_id": "dast", "action": second if first == "dast" else first}
         if first == "open":
             return {"kind": "web", "tool_id": _shell_tool_id(second)}
         if second == "catalog":
@@ -1914,7 +2160,9 @@ class JobManager:
             raise ValueError(f"unsupported batch action: {action}")
         if tool_id == "emulator" and action not in _EMULATOR_ACTIONS:
             raise ValueError(f"unsupported emulator action: {action}")
-        if tool_id not in ("all", "emulator") and (tool_id not in SPEC_BY_ID or action not in _ACTIONS):
+        if tool_id == "dast" and action not in _DAST_ACTIONS:
+            raise ValueError(f"unsupported DAST toolchain action: {action}")
+        if tool_id not in ("all", "emulator", "dast") and (tool_id not in SPEC_BY_ID or action not in _ACTIONS):
             raise ValueError(f"unknown tool or action: {tool_id}/{action}")
 
         job = Job(
@@ -1943,6 +2191,13 @@ class JobManager:
                 try:
                     sync_installed_database()
                     log("Installed-software database synced after emulator setup.")
+                except Exception as exc:
+                    log(f"WARNING: inventory sync failed: {type(exc).__name__}: {exc}")
+            elif tool_id == "dast":
+                job.result = install_dast_toolchain(log, action)
+                try:
+                    sync_installed_database()
+                    log("Installed-software database synced after DAST toolchain setup.")
                 except Exception as exc:
                     log(f"WARNING: inventory sync failed: {type(exc).__name__}: {exc}")
             elif tool_id == "all":

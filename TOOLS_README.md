@@ -130,6 +130,32 @@ Open **Tools & emulator manager** in the sidebar or visit `/tools/dashboard`. To
 | `rms` | Runtime | Frida-based runtime manipulation web UI | Install Node.js, start RMS, then open configured URL | Manual web workflow |
 | `patch-apk` | Patching | Inject Frida Gadget into an APK | Use only on an authorized copy, then re-sign and test | Marked **invasive** |
 | `trashdroid` | Dynamic | Automated Android DAST framework | Requires Python deps and an authorized device/emulator | Hook is gated by `APKPT_TOOLCHAIN_AUTO` |
+| `drozer` | Dynamic | Android IPC/Binder attack-surface framework (OWASP MASTG-TOOL-0015) | Host console: `drozer console connect` after the agent is running on an owned device/emulator | Host-side `pip` install only; agent APK is **never** auto-installed. Set `APKPT_DROZER_CMD`. Windows hosts should use Docker/WSL |
+| `androguard` | Static | Android reverse engineering and static-analysis Python toolkit | `androguard analyze app.apk` | Python package; set `APKPT_ANDROGUARD_CMD` |
+| `apkid` | Static | Packer/obfuscator/compiler detection (MASTG-TOOL-0009) | `apkid app.apk` | Python package; requires Java; set `APKPT_APKID_CMD` |
+| `qark` | Static | Android static analyser with PoC generation | `qark --apk app.apk` | Python package; set `APKPT_QARK_CMD` |
+| `ghidra` | Decode | Native binary/firmware reverse engineering (MASTG-TOOL-0033) | Use the official release manually | **Manual/verify only**; requires a JDK |
+| `radare2` | Decode | r2/r2frida reverse engineering (MASTG-TOOL-0028/0036) | Use upstream releases manually | **Manual/verify only**; r2frida needs Frida |
+| `class-dump` | Decode | iOS Objective-C class interface dumping | Use upstream release manually | **Manual/verify only**; iOS binaries only |
+| `internalblue` | Device | Broadcom/Cypress Bluetooth firmware experimentation | Use on compatible owned lab hardware | **Manual/verify + invasive**; firmware changes can affect radio behaviour |
+| `ubertooth` | Device | 2.4 GHz Bluetooth sniffer | Attach owned hardware and capture manually | **Manual/verify + invasive**; passive monitoring in an RF lab |
+| `nrf-sniffer` | Device | Nordic BLE sniffer for Wireshark | Use official Nordic hardware/tools | **Manual/verify only**; passive capture |
+| `aircrack-ng` | Device | Wi-Fi capture, injection and WEP/WPA analysis | Use only on owned networks/RF lab | **Manual/verify + invasive**; active modules disrupt networks |
+| `bettercap` | Device | Wi-Fi/BLE/network recon and MITM (MASTG-TOOL-0076) | Manual, scoped lab use | **Manual/verify + invasive**; never driven by this platform |
+| `kismet` | Device | Passive wireless detector/sniffer/WIDS | Manual, authorized environments | **Manual/verify only** |
+| `hcxtools` | Device | Convert wireless captures to offline hash formats | Manual use on captured data | **Manual/verify only**; handle captures as sensitive |
+| `wireshark` | Device | Packet capture and protocol analysis (MASTG-TOOL-0081) | Use official installer | **Manual/verify only**; captures may contain secrets |
+| `ipsw` | Device | iOS firmware/ipsw research (MASTG-TOOL-0105) | Manual CLI use | **Manual/verify only** |
+| `ios-deploy` | Device | Install/debug iOS apps over USB (MASTG-TOOL-0054) | Manual, macOS only | **Manual/verify only**; changes device state |
+| `libimobiledevice` | Device | Cross-platform iOS device protocols (MASTG-TOOL-0126) | Manual CLI use | **Manual/verify only** |
+| `binwalk` | Root | Firmware image carving and extraction | Manual offline use on owned firmware | **Manual/verify only** |
+| `unblob` | Root | Firmware extraction for 100+ formats | Manual offline use | **Manual/verify only** |
+| `uefitool` | Root | UEFI/BIOS firmware parsing and module extraction | Manual offline use | **Manual/verify only**; never flash modified firmware |
+| `chipsec` | Root | Platform/BIOS/firmware assessment | Manual use on test systems | **Manual/verify + invasive**; kernel driver and hardware access |
+| `flashrom` | Root | SPI flash read/write/erase | Manual use on owned lab hardware | **Manual/verify + invasive**; writing can brick hardware |
+| `fwupd` | Root | Firmware version/integrity baselining | Manual read-only checks | **Manual/verify only**; do not apply updates here |
+| `u-boot` | Root | Bootloader and verified-boot tooling | Manual offline inspection/build | **Manual/verify only**; never replace a bootloader here |
+| `hashcat` | Root | Offline hash auditing | Manual use on authorized hashes | **Manual/verify only** |
 | `mitmproxy` | Proxy | HTTP(S) interception and scripting | `mitmdump -l 0.0.0.0:8080 -s addon.py` | Install device CA only on authorized test devices |
 | `zaproxy` | Proxy | Intercepting proxy and web/API scanner | Use official installer; configure proxy and scope | **Manual** tool |
 | `burp` | Proxy | Licensed interception proxy | Use PortSwigger installer and accept license | **Manual** tool |
@@ -140,7 +166,7 @@ Open **Tools & emulator manager** in the sidebar or visit `/tools/dashboard`. To
 | `apatch` | Root | Root/system modification for owned lab devices | Perform manually only in an authorized lab | **Manual + invasive** |
 | `recmanager` | Root | Magisk module/repository management | Install manually on authorized rooted device | **Manual + invasive** |
 
-Installed tools do **not** show a redundant **Install** button. Missing installable tools show **Install**. Manual/unsupported tools show **Why** with the exact explanation.
+Installed tools do **not** show a redundant **Install** button. Missing installable tools show **Install**. Manual/unsupported tools show **Why** with the exact explanation. The toolbar's **Install DAST tools** action installs the host-side DAST/SAST CLI subset (`drozer`, `androguard`, `apkid`, `qark`) after `APKPT_TOOL_MANAGER=1`; it is also part of the gated emulator setup job.
 
 ---
 
@@ -288,15 +314,22 @@ Useful REPL actions include filesystem browsing, SQLite inspection, memory searc
 drozer (IPC attack surface):
 
 ```bash
-pipx install drozer
+# Use the platform's gated host-side install, or install manually with pipx:
+POST /api/tools/dast/install   {"confirm": true}   # requires APKPT_TOOL_MANAGER=1
+# pipx install drozer          # equivalent host-console install
+
+# Manual, out-of-platform step on an OWNED device/emulator only:
 adb install drozer-agent.apk
-# Enable Embedded Server in the agent, then connect
+# Enable Embedded Server in the agent, then connect explicitly
+adb forward tcp:31415 tcp:31415   # only if your setup requires explicit forwarding
 drozer console connect
 
 dz> run app.package.list -f example
 dz> run app.package.attacksurface com.example.app
 dz> run app.activity.start --component com.example.app .ExportedActivity
 ```
+
+**Host-side DAST toolchain job:** the dashboard's **Install DAST tools** button (or `POST /api/tools/dast/install` with `confirm: true`, enabled by `APKPT_TOOL_MANAGER=1`) installs only the host-side CLI analysers **drozer** (console), **Androguard**, **APKiD** and **QARK**. The emulator setup job runs the same host-only step. No agent APK, emulator launch, device pairing, radio scan or firmware change is performed; those remain separate, explicit, manual operations in an authorized lab. All other mobile/radio/firmware catalog entries are **manual / verify-only** research references.
 
 ### 4.4 Interception proxy and certificate pinning
 
@@ -651,6 +684,12 @@ $env:APKPT_DAST_SERIAL='emulator-5554'
 $env:APKPT_DAST_FRIDA='1'
 $env:APKPT_DAST_PROXY='burp'
 
+# Explicit host-side DAST CLI tool overrides (optional)
+$env:APKPT_DROZER_CMD='drozer'
+$env:APKPT_ANDROGUARD_CMD='androguard'
+$env:APKPT_APKID_CMD='apkid'
+$env:APKPT_QARK_CMD='qark'
+
 # Optional Bluetooth read-only tooling status
 $env:APKPT_BLUETOOTH_LAB='1'
 
@@ -668,7 +707,7 @@ python run.py --port 8001
 
 Notes:
 
-- Python 3.15 is supported by the platform, but some upstream packages (`semgrep`, MobSF native dependencies) may lack compatible wheels. The platform reports these as **Unavailable** with **Why** and records install jobs as `skipped` rather than emitting long pip tracebacks.
+- Python 3.15 is supported by the platform, but some upstream packages (`semgrep`, MobSF native dependencies, `drozer` and `androguard` through PyYAML) lack compatible wheels without local MSVC build tools. The platform reports these as **Unavailable** with **Why** and records install jobs as `skipped` rather than emitting long pip tracebacks. Install those tools under Python 3.10-3.14 when needed; APKiD and QARK installed successfully on the current Python 3.15 host.
 - Use Python 3.10–3.14 or the official manual guide for those tools, then run **Verify**.
 - `setx` affects new terminals only; in the current PowerShell session use `$env:` assignments.
 - The static UI and `/tools/dashboard` are active by default; the React source is maintained and built, and can be served with `APKPT_WEB_UI=react`.
@@ -684,6 +723,8 @@ Before any action:
 - [ ] Test accounts, test data and isolated environments are used.
 - [ ] Manual/licensed/root/invasive tools are handled by an authorized operator.
 - [ ] Proxy CAs and device changes are limited to lab devices and removed afterwards.
+- [ ] Radio/firmware/bootloader/BIOS tooling is used only on owned hardware in an authorized RF/hardware lab; active scanning, pairing, flashing and kernel-driver tools are never driven from this platform.
+- [ ] drozer/dynamic tool agents are installed manually on owned devices only, never automatically from a scan or page load.
 - [ ] Active DAST is not run against shared production systems.
 - [ ] Findings are verified manually before being reported as exploitable.
 - [ ] Medical/PHI/standards output is treated as evidence mapping, not certification.
@@ -735,6 +776,30 @@ Before any action:
 - Android emulator / AVD manager: https://developer.android.com/studio/run/managing-avds
 - BlueZ: https://www.bluez.org/
 - Nordic Semiconductor nRF Util: https://www.nordicsemi.com/Products/Development-tools/nRF-Util
+- Nordic nRF Sniffer for BLE: https://www.nordicsemi.com/Products/Development-tools/nRF-Sniffer-for-Bluetooth-LE
+- InternalBlue: https://github.com/seemoo-lab/InternalBlue
+- Ubertooth One: https://github.com/greatscottgadgets/ubertooth
+- Aircrack-ng: https://www.aircrack-ng.org/
+- Bettercap: https://www.bettercap.org/
+- Kismet: https://www.kismetwireless.net/
+- hcxtools: https://github.com/ZerBea/hcxtools
+- Wireshark: https://www.wireshark.org/
+- Ghidra: https://ghidra-sre.org/
+- radare2 / r2frida: https://rada.re/
+- class-dump: https://github.com/nygard/class-dump
+- APKiD: https://github.com/rednaga/APKiD
+- QARK: https://github.com/linkedin/qark
+- ipsw: https://github.com/blacktop/ipsw
+- ios-deploy: https://github.com/ios-control/ios-deploy
+- libimobiledevice: https://libimobiledevice.org/
+- binwalk: https://github.com/ReFirmLabs/binwalk
+- unblob: https://github.com/onekey-sec/unblob
+- UEFITool: https://github.com/LongSoft/UEFITool
+- CHIPSEC: https://chipsec.github.io/
+- flashrom: https://www.flashrom.org/
+- fwupd: https://fwupd.org/
+- U-Boot: https://www.denx.de/wiki/U-Boot
+- Hashcat: https://hashcat.net/hashcat/
 - Burp Suite: https://portswigger.net/burp
 - Contrast IAST: https://docs.contrastsecurity.com/en/iast-technology.html
 - Black Duck Seeker: https://www.blackduck.com/interactive-application-security-testing.html

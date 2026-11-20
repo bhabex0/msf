@@ -258,6 +258,15 @@ def build_emulator_dast_plan() -> list[dict[str, Any]]:
             ),
         },
         {
+            "name": "install_dast_tools",
+            "status": "planned",
+            "command": "POST /api/tools/dast/install with confirm=true",
+            "detail": (
+                "Installs host-side CLI tooling only (drozer console, Androguard, APKiD, QARK). "
+                "No device agent, emulator launch or radio change is performed."
+            ),
+        },
+        {
             "name": "launch_avd",
             "status": "gated" if not config.EMULATOR_AUTO else "allowed",
             "command": f"{paths['emulator_binary']} -avd {paths['avd']}",

@@ -602,6 +602,13 @@ class AdvancedFeatureTests(unittest.TestCase):
             "apkleaks", "apkhunt", "objection", "frida-tools", "mitmproxy",
             "semgrep", "mobsf", "patch-apk", "trashdroid", "rms",
             "zaproxy", "burp", "apatch", "recmanager", "chromium",
+            "drozer", "androguard", "apkid", "qark",
+            "ghidra", "radare2", "class-dump",
+            "internalblue", "ubertooth", "nrf-sniffer", "aircrack-ng",
+            "bettercap", "kismet", "hcxtools", "wireshark",
+            "ipsw", "ios-deploy", "libimobiledevice",
+            "binwalk", "unblob", "uefitool", "chipsec", "flashrom",
+            "fwupd", "u-boot", "hashcat",
         ):
             self.assertIn(expected, tools)
         self.assertTrue(all(tool_manager.safe_url(t["source_url"]) for t in tools.values()))
@@ -671,7 +678,7 @@ class AdvancedFeatureTests(unittest.TestCase):
         with patch.object(sys, "version_info", (3, 15, 0)):
             semgrep_block = tool_manager._auto_install_block(tool_manager.SPEC_BY_ID["semgrep"])
             self.assertIn("Auto-install is unavailable", semgrep_block)
-            for tool_id in ("semgrep", "mobsf"):
+            for tool_id in ("semgrep", "mobsf", "drozer", "androguard"):
                 result = tool_manager._run_tool_action(
                     tool_manager.SPEC_BY_ID[tool_id], "install", lambda _line: None,
                 )
@@ -1066,9 +1073,9 @@ class PassiveBluetoothAndEmulatorTests(unittest.TestCase):
         self.assertEqual(status["paths"]["avd"], "apkpt_test_avd")
         self.assertEqual(
             [step["name"] for step in status["dast_plan"]],
-            ["create_avd", "launch_avd", "verify_adb", "run_dast", "teardown"],
+            ["create_avd", "install_dast_tools", "launch_avd", "verify_adb", "run_dast", "teardown"],
         )
-        self.assertEqual(status["dast_plan"][1]["status"], "gated")
+        self.assertEqual(status["dast_plan"][2]["status"], "gated")
         self.assertEqual(build_emulator_dast_plan(), status["dast_plan"])
 
     def test_emulator_selects_attached_emulator_when_no_serial(self):
@@ -1093,7 +1100,7 @@ class PassiveBluetoothAndEmulatorTests(unittest.TestCase):
                 self.assertEqual(client.get("/api/lab/emulator").status_code, 200)
                 plan = client.get("/api/lab/emulator/plan")
                 self.assertEqual(plan.status_code, 200)
-                self.assertEqual(len(plan.json()["steps"]), 5)
+                self.assertEqual(len(plan.json()["steps"]), 6)
                 bt = client.get("/api/bluetooth/status")
                 self.assertEqual(bt.status_code, 200)
                 self.assertTrue(bt.json()["read_only"])
@@ -1138,6 +1145,58 @@ class PassiveBluetoothAndEmulatorTests(unittest.TestCase):
             spec = tool_manager.SPEC_BY_ID[tool_id]
             self.assertTrue(spec.manual)
             self.assertEqual(tool_manager.tool_group(spec)["id"], "device")
+
+    def test_mobile_and_firmware_tool_catalog_is_manual_and_gated(self):
+        with patch.object(sys, "version_info", (3, 14, 0)):
+            data = tool_manager.catalog()
+        tools = {t["id"]: t for t in data["tools"]}
+        manual = {k: v for k, v in tools.items() if v["manual"]}
+        host_tools = ("drozer", "androguard", "apkid", "qark")
+        for tool_id in host_tools:
+            self.assertFalse(tools[tool_id]["manual"])
+            self.assertIn(tools[tool_id]["group"], ("dynamic", "static"))
+            self.assertTrue({"install", "update"}.intersection(tools[tool_id]["actions"]))
+        self.assertEqual(tool_manager.DAST_TOOL_IDS, host_tools)
+        self.assertIn("agent", tools["drozer"]["install_note"].lower())
+
+        manual_only = (
+            "ghidra", "radare2", "class-dump", "internalblue", "ubertooth",
+            "nrf-sniffer", "aircrack-ng", "bettercap", "kismet", "hcxtools",
+            "wireshark", "ipsw", "ios-deploy", "libimobiledevice", "binwalk",
+            "unblob", "uefitool", "chipsec", "flashrom", "fwupd", "u-boot", "hashcat",
+        )
+        for tool_id in manual_only:
+            self.assertIn(tool_id, manual, f"{tool_id} must be manual/verify-only")
+            self.assertEqual(manual[tool_id]["actions"], ["verify"])
+            self.assertFalse(manual[tool_id]["installable"])
+            self.assertTrue(tool_manager.safe_url(manual[tool_id]["source_url"]))
+        for tool_id in ("internalblue", "ubertooth", "aircrack-ng", "bettercap", "chipsec", "flashrom"):
+            self.assertTrue(manual[tool_id]["invasive"])
+        for tool_id in ("binwalk", "unblob", "uefitool", "chipsec", "flashrom", "fwupd", "u-boot", "hashcat"):
+            self.assertEqual(manual[tool_id]["group"], "root")
+
+    def test_dast_toolchain_job_is_gated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.multiple(
+                config, AUTH_ENABLED=False, AUDIT_LOG=Path(tmp) / "audit.log",
+                TOOL_MANAGER_ENABLED=False,
+            ), TestClient(app) as client:
+                result = client.post("/api/tools/dast/install", json={"confirm": True})
+                self.assertEqual(result.status_code, 200)
+                self.assertEqual(result.json()["status"], "skipped")
+                self.assertIn("APKPT_TOOL_MANAGER", result.json()["detail"])
+                self.assertEqual(
+                    client.post("/api/tools/dast/verify", json={"confirm": False}).status_code, 400
+                )
+                self.assertEqual(
+                    client.post("/api/tools/dast/bogus", json={"confirm": True}).status_code, 400
+                )
+        with self.assertRaises(ValueError):
+            tool_manager.MANAGER.submit("dast", "pull")
+        self.assertEqual(
+            tool_manager.parse_shell_command("dast install"),
+            {"kind": "job", "tool_id": "dast", "action": "install"},
+        )
 
     def test_adb_resolves_from_sdk_when_not_on_path(self):
         suffix = ".exe" if os.name == "nt" else ""
