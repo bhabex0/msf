@@ -124,7 +124,7 @@ Open **Tools & emulator manager** in the sidebar or visit `/tools/dashboard`. To
 | `apkleaks` | Static | URIs, endpoints and secrets in APKs | `apkleaks -f app.apk -o report.txt` | Python package |
 | `apkhunt` | Static | OWASP MASVS-oriented static workbench | Clone via manager, then start its documented web/Docker workflow | v2+ uses Docker Compose; manual startup |
 | `semgrep` | Static | Rule-based SAST on decompiled Java/Kotlin | Run after `jadx`; see commands below | On Python 3.15 upstream wheels may be unavailable; platform reports `skipped` with the reason |
-| `mobsf` | Static/Dynamic | Automated Android/iOS/Windows static and dynamic analysis | Run MobSF separately, set `APKPT_MOBSF_URL`, then use **Web UI** or scan hooks | Native deps vary. Prefer the official Docker image |
+| `mobsf` | Static/Dynamic | Automated Android/iOS/Windows static and dynamic analysis | Run MobSF separately, set `APKPT_MOBSF_PORT=8001` (or full `APKPT_MOBSF_URL`), then use **Web UI** or scan hooks | Native deps vary. Prefer the official Docker image on port `8001`, not the platform's `8000` |
 | `objection` | Runtime | Frida-powered runtime exploration | `objection -g com.example.app explore` | Repackaging/gadget changes signature |
 | `frida-tools` | Runtime | Function tracing and instrumentation | `frida-ps -U`, `frida -U -f pkg -l hook.js` | Needs frida-server or Gadget |
 | `rms` | Runtime | Frida-based runtime manipulation web UI | Install Node.js, start RMS, then open configured URL | Manual web workflow |
@@ -167,6 +167,21 @@ Open **Tools & emulator manager** in the sidebar or visit `/tools/dashboard`. To
 | `recmanager` | Root | Magisk module/repository management | Install manually on authorized rooted device | **Manual + invasive** |
 
 Installed tools do **not** show a redundant **Install** button. Missing installable tools show **Install**. Manual/unsupported tools show **Why** with the exact explanation. The toolbar's **Install DAST tools** action installs the host-side DAST/SAST CLI subset (`drozer`, `androguard`, `apkid`, `qark`) after `APKPT_TOOL_MANAGER=1`; it is also part of the gated emulator setup job.
+
+### 3.1 Web UI port map
+
+Run the platform on `8000` and give each optional web UI its own local port:
+
+| Service | Recommended | Port variable | Full URL override |
+|---|---:|---|---|
+| Platform | `8000` | `APKPT_PLATFORM_PORT` (reported only; use `run.py --port`) | — |
+| MobSF static | `8001` | `APKPT_MOBSF_PORT` | `APKPT_MOBSF_URL` |
+| MobSF dynamic | `8002` | `APKPT_MOBSF_DYNAMIC_PORT` | `APKPT_MOBSF_DYNAMIC_URL` |
+| APKHunt | `8003` | `APKPT_APKHUNT_PORT` | `APKPT_APKHUNT_URL` |
+| RMS | `8004` | `APKPT_RMS_PORT` | `APKPT_RMS_URL` |
+| ZAP web UI | `8005` | `APKPT_ZAP_WEB_PORT` | `APKPT_ZAP_WEB_URL` |
+
+Setting a port variable builds `http://127.0.0.1:<port>`; no URL is guessed until then. A full `*_URL` value always wins. The **Web UI ports** panel in the tool manager shows the recommended values and currently configured URLs. Web UI launching still requires the existing browser-open gate described in section 2.2.
 
 ---
 
@@ -253,14 +268,21 @@ MobSF dynamic analysis:
 ```bash
 docker pull opensecurity/mobile-security-framework-mobsf:latest
 
-# Static only
-docker run -it --rm -p 8000:8000 \
+# Static only — host 8001 keeps the platform on 8000
+docker run -it --rm -p 8001:8000 \
   opensecurity/mobile-security-framework-mobsf:latest
 
-# Static + Android dynamic analysis
-docker run -it --rm -p 8000:8000 -p 1337:1337 \
+# Static + Android dynamic analysis (second instance on host 8002)
+docker run -it --rm -p 8002:8000 -p 1337:1337 \
   -e MOBSF_ANALYZER_IDENTIFIER=<adb-device-id> \
   opensecurity/mobile-security-framework-mobsf:latest
+```
+
+Then point the platform at the dedicated ports:
+
+```powershell
+$env:APKPT_MOBSF_PORT='8001'
+$env:APKPT_MOBSF_DYNAMIC_PORT='8002'
 ```
 
 MobSF supports rooted Android VMs up to API 30 and, from v4.6.0, Frida Gadget mode for non-rooted/newer Android 5.0+ targets. For Docker with a host ADB server, restrict port `5037` to the Docker host.
@@ -509,7 +531,7 @@ class-dump work/ipa/Payload/*.app/AppBinary > work/objc_headers.txt
 dsdump --swift --color --verbose=5 --arch arm64 --defined AppBinary > work/swift.txt
 
 # Upload the IPA to MobSF for automated static analysis
-# Then set APKPT_MOBSF_URL to that MobSF instance for platform-linked review.
+# Then set APKPT_MOBSF_PORT (recommended 8001) or APKPT_MOBSF_URL for platform-linked review.
 ```
 
 Review:
@@ -636,7 +658,7 @@ python run.py --port 8000
 
 1. Enable the tool manager: `APKPT_TOOL_MANAGER=1`.
 2. Install/verify `apktool`, `jadx`, `aapt2`, `apkleaks`, `semgrep`.
-3. Start MobSF separately and set `APKPT_MOBSF_URL` / API key.
+3. Start MobSF separately on a dedicated port (recommended `8001`) and set `APKPT_MOBSF_PORT` or a full `APKPT_MOBSF_URL`, plus the API key.
 4. Run the commands in section 4.1.
 5. Import or correlate results with platform findings and MASVS controls.
 
@@ -675,8 +697,17 @@ $env:APKPT_TOOL_MANAGER='1'
 # Optional web UI launching
 $env:APKPT_BROWSER_OPEN='1'
 
+# Dedicated web-tool ports (platform stays on 8000)
+$env:APKPT_TOOL_WEB_HOST='127.0.0.1'
+$env:APKPT_MOBSF_PORT='8001'
+$env:APKPT_MOBSF_DYNAMIC_PORT='8002'
+$env:APKPT_APKHUNT_PORT='8003'
+$env:APKPT_RMS_PORT='8004'
+$env:APKPT_ZAP_WEB_PORT='8005'
+# Full URLs still override the generated http://127.0.0.1:<port> values.
+
 # MobSF integration
-$env:APKPT_MOBSF_URL='http://127.0.0.1:8000'
+$env:APKPT_MOBSF_PORT='8001'
 $env:APKPT_MOBSF_API_KEY='<api-key>'
 
 # DAST target (emulator preferred by default when attached)

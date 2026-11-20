@@ -42,7 +42,67 @@ TOOL_APKTOOL = os.getenv("APKPT_TOOL_APKTOOL", "1") == "1"
 TOOL_JADX = os.getenv("APKPT_TOOL_JADX", "1") == "1"
 TOOL_AAPT = os.getenv("APKPT_TOOL_AAPT", "1") == "1"
 
-MOBSF_URL = os.getenv("APKPT_MOBSF_URL", "").strip().rstrip("/")
+
+def _tool_port(env_name: str, default: int) -> int:
+    """Read a web-tool port with a clear failure for invalid values."""
+    raw = os.getenv(env_name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{env_name} must be an integer port, got {raw!r}") from exc
+    if not 1 <= value <= 65535:
+        raise ValueError(f"{env_name} must be between 1 and 65535, got {value}")
+    return value
+
+
+# Recommended local ports. The platform itself uses 8000 by default; each web
+# tool gets its own port so the dashboard and tool UIs can run simultaneously.
+# Setting any APKPT_*_PORT variable also constructs a local URL for that tool.
+TOOL_WEB_HOST = os.getenv("APKPT_TOOL_WEB_HOST", "127.0.0.1").strip().rstrip("/")
+TOOL_WEB_PORTS = {
+    "platform": _tool_port("APKPT_PLATFORM_PORT", 8000),
+    "mobsf": _tool_port("APKPT_MOBSF_PORT", 8001),
+    "mobsf_dynamic": _tool_port("APKPT_MOBSF_DYNAMIC_PORT", 8002),
+    "apkhunt": _tool_port("APKPT_APKHUNT_PORT", 8003),
+    "rms": _tool_port("APKPT_RMS_PORT", 8004),
+    "zaproxy": _tool_port("APKPT_ZAP_WEB_PORT", 8005),
+}
+TOOL_WEB_PORT_ENV = {
+    "platform": "APKPT_PLATFORM_PORT",
+    "mobsf": "APKPT_MOBSF_PORT",
+    "mobsf_dynamic": "APKPT_MOBSF_DYNAMIC_PORT",
+    "apkhunt": "APKPT_APKHUNT_PORT",
+    "rms": "APKPT_RMS_PORT",
+    "zaproxy": "APKPT_ZAP_WEB_PORT",
+}
+TOOL_WEB_URL_ENV = {
+    "mobsf": "APKPT_MOBSF_URL",
+    "mobsf_dynamic": "APKPT_MOBSF_DYNAMIC_URL",
+    "apkhunt": "APKPT_APKHUNT_URL",
+    "rms": "APKPT_RMS_URL",
+    "zaproxy": "APKPT_ZAP_WEB_URL",
+}
+
+
+def _configured_web_url(url_env: str, port_env: str, port_key: str) -> str:
+    """Use an explicit URL, else build one only when its port was set explicitly."""
+    explicit = os.getenv(url_env, "").strip().rstrip("/")
+    if explicit:
+        return explicit
+    if os.getenv(port_env, "").strip():
+        return f"http://{TOOL_WEB_HOST}:{TOOL_WEB_PORTS[port_key]}"
+    return ""
+
+
+def _configured_web_port(port_env: str, port_key: str) -> int | None:
+    """Return the active port only when the operator opted into it."""
+    return TOOL_WEB_PORTS[port_key] if os.getenv(port_env, "").strip() else None
+
+
+MOBSF_URL = _configured_web_url("APKPT_MOBSF_URL", "APKPT_MOBSF_PORT", "mobsf")
+MOBSF_PORT = _configured_web_port("APKPT_MOBSF_PORT", "mobsf")
 MOBSF_API_KEY = os.getenv("APKPT_MOBSF_API_KEY", "")
 MOBSF_TIMEOUT = int(os.getenv("APKPT_MOBSF_TIMEOUT", "300"))
 TOOL_SEMGREP = os.getenv("APKPT_TOOL_SEMGREP", "1") == "1"
@@ -104,7 +164,8 @@ TOOL_FINDING_LIMIT = max(0, int(os.getenv("APKPT_TOOL_FINDING_LIMIT", "0")))
 APKHUNT_CMD = os.getenv("APKPT_APKHUNT_CMD", "apkhunt")
 # APKHunt's current release is a local web workbench. These paths are
 # deployment-specific; override them to match the instance you are authorised to use.
-APKHUNT_URL = os.getenv("APKPT_APKHUNT_URL", "").strip().rstrip("/")
+APKHUNT_URL = _configured_web_url("APKPT_APKHUNT_URL", "APKPT_APKHUNT_PORT", "apkhunt")
+APKHUNT_PORT = _configured_web_port("APKPT_APKHUNT_PORT", "apkhunt")
 APKHUNT_UPLOAD_PATH = os.getenv("APKPT_APKHUNT_UPLOAD_PATH", "/api/scan/upload")
 APKHUNT_REPORT_PATH = os.getenv("APKPT_APKHUNT_REPORT_PATH", "/api/scan/report/{scan_id}")
 APKHUNT_API_KEY = os.getenv("APKPT_APKHUNT_API_KEY", "")
@@ -154,8 +215,10 @@ TOOL_MANAGER_MAX_WORKERS = int(os.getenv("APKPT_TOOL_MANAGER_WORKERS", "2"))
 TOOL_MANAGER_RETRIES = int(os.getenv("APKPT_TOOL_MANAGER_RETRIES", "3"))
 TOOL_MANAGER_RETRY_DELAY = float(os.getenv("APKPT_TOOL_MANAGER_RETRY_DELAY", "2"))
 INSTALLED_DB_PATH = Path(os.getenv("APKPT_INSTALLED_DB", str(STORAGE_DIR / "installed_tools.db")))
-RMS_URL = os.getenv("APKPT_RMS_URL", "").strip().rstrip("/")
-ZAP_WEB_URL = os.getenv("APKPT_ZAP_WEB_URL", "").strip().rstrip("/")
+RMS_URL = _configured_web_url("APKPT_RMS_URL", "APKPT_RMS_PORT", "rms")
+RMS_PORT = _configured_web_port("APKPT_RMS_PORT", "rms")
+ZAP_WEB_URL = _configured_web_url("APKPT_ZAP_WEB_URL", "APKPT_ZAP_WEB_PORT", "zaproxy")
+ZAP_WEB_PORT = _configured_web_port("APKPT_ZAP_WEB_PORT", "zaproxy")
 TOOL_ALLOWED_HOSTS = {
     host.strip().lower()
     for host in os.getenv(
@@ -193,7 +256,12 @@ BLUETOOTHCTL_CMD = os.getenv("APKPT_BLUETOOTHCTL_CMD", "bluetoothctl")
 HCITOOL_CMD = os.getenv("APKPT_HCITOOL_CMD", "hcitool")
 NRFUTIL_CMD = os.getenv("APKPT_NRFUTIL_CMD", "nrfutil")
 
-MOBSF_DYNAMIC_URL = os.getenv("APKPT_MOBSF_DYNAMIC_URL", MOBSF_URL)
+MOBSF_DYNAMIC_URL = (
+    os.getenv("APKPT_MOBSF_DYNAMIC_URL", "").strip().rstrip("/")
+    or _configured_web_url("APKPT_MOBSF_DYNAMIC_URL", "APKPT_MOBSF_DYNAMIC_PORT", "mobsf_dynamic")
+    or MOBSF_URL
+)
+MOBSF_DYNAMIC_PORT = _configured_web_port("APKPT_MOBSF_DYNAMIC_PORT", "mobsf_dynamic") or MOBSF_PORT
 # Explicit endpoint action only: open an authorised MobSF UI in Chromium.
 BROWSER_OPEN_ENABLED = os.getenv("APKPT_BROWSER_OPEN", "0") == "1"
 

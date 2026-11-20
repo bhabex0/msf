@@ -134,6 +134,15 @@ export default function ToolManager() {
   const running = jobs.filter((job) => ACTIVE.includes(job.status)).length
   const policy = catalog?.source_policy || {}
   const emulator = catalog?.emulator || {}
+  const webPorts = catalog?.web_ports || {}
+  const portLabels = {
+    platform: 'Platform',
+    mobsf: 'MobSF static',
+    mobsf_dynamic: 'MobSF dynamic',
+    apkhunt: 'APKHunt',
+    rms: 'RMS',
+    zaproxy: 'ZAP web UI',
+  }
 
   return (
     <div>
@@ -192,6 +201,19 @@ export default function ToolManager() {
             <div className="kv" key={key}><span>{key.replaceAll('_', ' ')}</span><span className="wrap">{String(value)}</span></div>
           ))}
           <p className="muted small">{(emulator.requirements || []).join(' · ')} Emulator setup does not launch or modify a device.</p>
+        </div>
+        <div className="mc">
+          <h3>Web UI ports</h3>
+          <p className="muted small">Dedicated local ports keep the platform and tool UIs from competing for 8000.</p>
+          {Object.entries(portLabels).map(([key, label]) => (
+            <div className="kv" key={key}>
+              <span>{label} <span className="muted small">{webPorts.port_env?.[key] || ''}</span></span>
+              <span className="wrap">
+                {webPorts.recommended?.[key] ?? '—'} · {webPorts.configured_urls?.[key] || 'not configured'}
+              </span>
+            </div>
+          ))}
+          <p className="muted small">{webPorts.note || ''}</p>
         </div>
       </div>
       <h3 style={{ marginTop: 22 }}>Installed software database</h3>

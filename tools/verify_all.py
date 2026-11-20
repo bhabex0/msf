@@ -245,6 +245,11 @@ def verify_iteration(index: int, apk_path: Path, work: Path) -> list[str]:
                 f"iteration {index}: tool-manager catalog incomplete", failures)
         require(all(tool_manager.safe_url(t["source_url"]) for t in manager_tools.values()),
                 f"iteration {index}: tool-manager source outside the allowlist", failures)
+        web_ports = manager_catalog.get("web_ports") or {}
+        require(len(set((web_ports.get("recommended") or {}).values())) == 6
+                and web_ports.get("recommended", {}).get("platform") == 8000
+                and web_ports.get("recommended", {}).get("mobsf") == 8001,
+                f"iteration {index}: dedicated tool web ports are missing", failures)
         require(not tool_manager.safe_url("https://evil.example/tool.zip"),
                 f"iteration {index}: arbitrary tool source was accepted", failures)
         require(all(manager_tools[name]["manual"] for name in ("burp", "zaproxy", "apatch", "keytool", "openssl")),

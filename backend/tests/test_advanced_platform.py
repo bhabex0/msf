@@ -591,6 +591,37 @@ class AdvancedFeatureTests(unittest.TestCase):
             r"Installed: C:\java\bin\java.exe",
         )
 
+    def test_tool_web_ports_are_dedicated_and_opt_in(self):
+        with patch.dict(os.environ, {}, clear=False):
+            for key in list(config.TOOL_WEB_PORT_ENV.values()) + list(config.TOOL_WEB_URL_ENV.values()):
+                os.environ.pop(key, None)
+            self.assertEqual(
+                config._configured_web_url("APKPT_MOBSF_URL", "APKPT_MOBSF_PORT", "mobsf"), ""
+            )
+            os.environ["APKPT_MOBSF_PORT"] = "8001"
+            self.assertEqual(
+                config._configured_web_url("APKPT_MOBSF_URL", "APKPT_MOBSF_PORT", "mobsf"),
+                "http://127.0.0.1:8001",
+            )
+            os.environ["APKPT_MOBSF_URL"] = "http://127.0.0.1:9999"
+            self.assertEqual(
+                config._configured_web_url("APKPT_MOBSF_URL", "APKPT_MOBSF_PORT", "mobsf"),
+                "http://127.0.0.1:9999",
+            )
+        with patch.dict(os.environ, {"APKPT_MOBSF_PORT": "not-a-port"}):
+            with self.assertRaises(ValueError):
+                config._tool_port("APKPT_MOBSF_PORT", 8001)
+
+        status = tool_manager.web_ports_status()
+        self.assertEqual(status["recommended"]["platform"], 8000)
+        self.assertEqual(status["recommended"]["mobsf"], 8001)
+        self.assertEqual(status["recommended"]["mobsf_dynamic"], 8002)
+        self.assertEqual(status["recommended"]["apkhunt"], 8003)
+        self.assertEqual(status["recommended"]["rms"], 8004)
+        self.assertEqual(status["recommended"]["zaproxy"], 8005)
+        self.assertEqual(len(set(status["recommended"].values())), len(status["recommended"]))
+        self.assertIn("web_ports", tool_manager.catalog())
+
     def test_tool_manager_catalog_sources_and_gates(self):
         data = tool_manager.catalog()
         tools = {t["id"]: t for t in data["tools"]}

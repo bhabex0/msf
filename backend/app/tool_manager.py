@@ -653,6 +653,27 @@ def _homepage(spec: ToolSpec) -> str:
     return spec.homepage or spec.source_url
 
 
+def web_ports_status() -> dict[str, Any]:
+    """Expose recommended and effective tool web-UI ports without guessing URLs."""
+    return {
+        "host": config.TOOL_WEB_HOST,
+        "recommended": dict(config.TOOL_WEB_PORTS),
+        "port_env": dict(config.TOOL_WEB_PORT_ENV),
+        "url_env": dict(config.TOOL_WEB_URL_ENV),
+        "configured_urls": {
+            "mobsf": config.MOBSF_URL,
+            "mobsf_dynamic": config.MOBSF_DYNAMIC_URL,
+            "apkhunt": config.APKHUNT_URL,
+            "rms": config.RMS_URL,
+            "zaproxy": config.ZAP_WEB_URL,
+        },
+        "note": (
+            "Set an APKPT_*_PORT variable to build a local URL on a dedicated port. "
+            "A full APKPT_*_URL variable always wins. Web UI launching stays gated."
+        ),
+    }
+
+
 def _default_system_image() -> str:
     system = platform.system().lower()
     arch = "arm64-v8a" if system == "darwin" and platform.machine().lower() in ("arm64", "aarch64") else "x86_64"
@@ -1999,6 +2020,7 @@ def catalog() -> dict[str, Any]:
             "android_sdk_root": str(config.ANDROID_SDK_ROOT),
         },
         "allowed_hosts": sorted(ALLOWED_HOSTS),
+        "web_ports": web_ports_status(),
         "source_policy": {
             "official_hosts_only": True,
             "https_only": True,

@@ -727,6 +727,9 @@ function renderToolGroups() {
 
 function renderToolManager() {
   const c=state.catalog||{}, tools=c.tools||[], jobs=state.jobs||[]
+  const wp=c.web_ports||{}, wpPorts=wp.recommended||{}, wpUrls=wp.configured_urls||{}, wpEnv=wp.port_env||{}
+  const wpLabels={platform:'Platform',mobsf:'MobSF static',mobsf_dynamic:'MobSF dynamic',apkhunt:'APKHunt',rms:'RMS',zaproxy:'ZAP web UI'}
+  const wpRows=Object.keys(wpLabels).map(k=>`<div class="kv"><span>${wpLabels[k]} <span class="muted small">${esc(wpEnv[k]||'')}</span></span><span class="wrap">${esc(String(wpPorts[k]||'—'))} · ${esc(wpUrls[k]||'not configured')}</span></div>`).join('')
   const rows=tools.map(t=>{
     const act=(a,label)=>`<button class="btn compact" data-tool="${esc(t.id)}" data-tool-action="${a}">${label}</button>`
     const reason=t.install_block_reason||t.install_note||'Manual installation only.'
@@ -767,7 +770,9 @@ function renderToolManager() {
       <div class="kv"><span>Image</span><span>${esc((c.emulator||{}).system_image||'')}</span></div>
       <div class="kv"><span>Java</span><span>${esc((c.emulator||{}).needs?.java_runtime||'')}</span></div>
       <div class="kv"><span>SDK root</span><span class="wrap">${esc(c.android_sdk_root||'')}</span></div>
-      <p class="muted small">${((c.emulator||{}).requirements||[]).join(' · ')} Emulator setup does not launch or modify a device.</p></div></div>
+      <p class="muted small">${((c.emulator||{}).requirements||[]).join(' · ')} Emulator setup does not launch or modify a device.</p></div>
+    <div class="mc"><h3>Web UI ports</h3><p class="muted small">Dedicated local ports keep the platform and tool UIs from competing for 8000.</p>
+      ${wpRows}<p class="muted small">${esc(wp.note||'')}</p></div></div>
     <h3 style="margin-top:22px">Installed software database</h3>${installedHtml()}
     <div class="tool-access">
       <h3>Tool access <span class="muted small" id="tool-match-count">${tools.length} tools</span></h3>

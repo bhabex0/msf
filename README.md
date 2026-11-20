@@ -33,6 +33,21 @@ python run.py --port 8000
 
 Open **http://127.0.0.1:8000** in a browser.
 
+### Dedicated ports for web tools
+
+The platform keeps port `8000`; each optional web UI has its own recommended local port so they can run at the same time:
+
+| Service | Recommended port | Set one of these to enable its dashboard URL |
+|---|---:|---|
+| Platform dashboard | `8000` | `python run.py --port 8000` / `APKPT_PLATFORM_PORT` |
+| MobSF static | `8001` | `APKPT_MOBSF_PORT=8001` or `APKPT_MOBSF_URL=...` |
+| MobSF dynamic | `8002` | `APKPT_MOBSF_DYNAMIC_PORT=8002` or `APKPT_MOBSF_DYNAMIC_URL=...` |
+| APKHunt | `8003` | `APKPT_APKHUNT_PORT=8003` or `APKPT_APKHUNT_URL=...` |
+| RMS | `8004` | `APKPT_RMS_PORT=8004` or `APKPT_RMS_URL=...` |
+| ZAP web UI | `8005` | `APKPT_ZAP_WEB_PORT=8005` or `APKPT_ZAP_WEB_URL=...` |
+
+Setting a `*_PORT` variable constructs `http://127.0.0.1:<port>` for that tool; a full `*_URL` variable always wins. No URL is guessed until you set one of these variables, and Web UI launching remains gated. The **Tools → Web UI ports** panel shows the effective values.
+
 Alternatively, run the API alone:
 
 ```bash
@@ -173,7 +188,7 @@ Scan history is stored on disk, so previous reports remain available after a res
 - Each successful install/update writes the tool name, version, executable path, setup/archive path, official source URL, configured web URL, install timestamp and originating job ID to a local SQLite inventory (`backend/storage/installed_tools.db` by default). `Sync installed DB` backfills records for tools already found on the system.
 - The standalone HTML dashboard is available at `/tools/dashboard`. It shows the OS, source policy, emulator requirements, installed executables/setup files, ordered tool access and recent job logs. It does not launch anything on page load.
 - Tool access is sequenced into seven numbered workflow groups with icons and small action text: **1 Decode & inspect**, **2 Static analysis**, **3 Device & emulator**, **4 Runtime & patching**, **5 Dynamic testing**, **6 Proxy & browser**, **7 Manual / root lab**. Search by name/id/category or click a group chip to filter. Manual and invasive tools are labelled and placed last. Each card exposes only the allowed actions for that tool (Install, Update, Pull for repository-backed tools, Verify, Web UI for configured URLs, and official Source). The full table is still available under **Detailed catalog table** in the main UI.
-- Per-tool **Web UI** buttons (and the MobSF button) call the gated `/api/tools/web/{tool_id}` endpoint. Only explicitly configured URLs are used: `APKPT_MOBSF_URL` / `APKPT_MOBSF_DYNAMIC_URL`, `APKPT_APKHUNT_URL`, `APKPT_RMS_URL` and `APKPT_ZAP_WEB_URL`. Server-side launching still requires `APKPT_BROWSER_OPEN=1`; otherwise the API returns `skipped`. The existing `POST /api/lab/open-mobsf` remains available for scan-specific MobSF links. Both responses now include a fresh `installed` / `version` / `path` check, and a skipped MobSF URL message states whether the local MobSF package is installed. The UI refreshes the catalog and installed inventory as soon as a job finishes or a Web UI action returns, so tool status and the message banner update immediately instead of staying `missing` until a manual reload.
+- Per-tool **Web UI** buttons (and the MobSF button) call the gated `/api/tools/web/{tool_id}` endpoint. Only explicitly configured URLs are used: `APKPT_MOBSF_URL` / `APKPT_MOBSF_DYNAMIC_URL`, `APKPT_APKHUNT_URL`, `APKPT_RMS_URL` and `APKPT_ZAP_WEB_URL`, or the matching `APKPT_*_PORT` variables that build local URLs on dedicated ports. Server-side launching still requires `APKPT_BROWSER_OPEN=1`; otherwise the API returns `skipped`. The existing `POST /api/lab/open-mobsf` remains available for scan-specific MobSF links. Both responses now include a fresh `installed` / `version` / `path` check, and a skipped MobSF URL message states whether the local MobSF package is installed. The UI refreshes the catalog and installed inventory as soon as a job finishes or a Web UI action returns, so tool status and the message banner update immediately instead of staying `missing` until a manual reload.
 - Starting any install/update/verify/emulator/DAST-toolchain job opens a full-height **green live terminal** on the right side. It streams the persisted job log while the job runs, then closes automatically 3 seconds after completion, failure or skip. `×` or `Esc` closes it early. The footer keeps the “For authorized security testing only” notice visible.
 - A bottom-right **shell** widget provides a small command console for the same gated jobs. It is collapsed by default, toggles with the `›_ shell` button or `Ctrl`/`Cmd` + `` ` ``, and auto-hides after 30 seconds of inactivity. It accepts only allowlisted commands such as `help`, `status`, `jobs`, `sync`, `install all`, `update all`, `verify all`, `emulator install`, `dast install`, `apktool install`, `adb verify`, `gittool pull` and `open mobsf`; it does **not** expose an arbitrary OS shell. Commands are audited, require `confirm: true`, and create normal persisted jobs with streamed logs. `clear`, ↑/↓ history and `Esc` hide are client-side only. Job banners, status pills, progress indicators and streamed log lines use terminal-style colours: neon **green** while installing/updating/processing/running, regular green for normal success, **blue** for info, **yellow** for low-level warnings, **orange** for high errors and **red** for critical errors. The same colour classes are used by `/tools/dashboard` and the React source UI.
 
@@ -227,6 +242,7 @@ All settings are environment variables with sensible defaults:
 | `APKPT_TOOLCHAIN_TIMEOUT` | `300` | Timeout for external tool commands |
 | `APKPT_TOOL_FINDING_LIMIT` | `0` | Max imported tool/SCA findings; `0` means unlimited (no 100-result cap) |
 | `APKPT_TOOL_APKHUNT` / `_APKLEAKS` / `_APPSCAN` / `_TRASHDROID` / `_RMS` / `_MITMPROXY` / `_ZAP` / `_BURP` / `_RECMANAGER` | `1` | Per-tool enable switches |
+| `APKPT_APKHUNT_PORT` | `8003` | Build `APKPT_APKHUNT_URL` on a dedicated local port when set |
 | `APKPT_APKHUNT_URL` / `_UPLOAD_PATH` / `_REPORT_PATH` / `_API_KEY` | empty | Authorised APKHunt web workbench hook |
 | `APKPT_APPSCAN_SERVER` / `_API_KEY` / `_CMD` | empty | HCL AppScan upload settings; `_CMD` must be a non-interactive template |
 | `APKPT_TRASHDROID_CMD` / `_DROZER_CMD` / `_ANDROGUARD_CMD` / `_APKID_CMD` / `_QARK_CMD` / `_RMS_CMD` / `_MITMPROXY_CMD` / `_ZAP_CMD` / `_BURP_CMD` | tool defaults | Binary overrides for lab tools |
@@ -234,7 +250,11 @@ All settings are environment variables with sensible defaults:
 | `APKPT_ADB_CMD` | `adb` | adb binary/command override |
 | `APKPT_TOOL_APKTOOL` / `_JADX` / `_AAPT` / `_SEMGREP` | `1` | Enable tool hooks when installed |
 | `APKPT_SEMGREP_TIMEOUT` | `90` | Semgrep timeout in seconds |
-| `APKPT_MOBSF_URL` / `_API_KEY` | empty | MobSF static integration |
+| `APKPT_TOOL_WEB_HOST` | `127.0.0.1` | Host used when a `*_PORT` variable builds a tool web UI URL |
+| `APKPT_PLATFORM_PORT` | `8000` | Reported platform port (the actual listener is set with `run.py --port`) |
+| `APKPT_MOBSF_PORT` | `8001` | Build `APKPT_MOBSF_URL` on a dedicated local port when set |
+| `APKPT_MOBSF_URL` / `_API_KEY` | empty | MobSF static integration; a full URL overrides `APKPT_MOBSF_PORT` |
+| `APKPT_MOBSF_DYNAMIC_PORT` | `8002` | Build `APKPT_MOBSF_DYNAMIC_URL` on a dedicated local port when set |
 | `APKPT_MOBSF_DYNAMIC_URL` | `APKPT_MOBSF_URL` | MobSF dynamic API instance |
 | `APKPT_BROWSER_OPEN` | `0` | Allow server-side web-UI/MobSF launching in Chromium/system browser |
 | `APKPT_EMULATOR_AUTO` | `0` | Allow explicit device proxy changes |
@@ -248,7 +268,9 @@ All settings are environment variables with sensible defaults:
 | `APKPT_TOOL_MANAGER_RETRIES` / `_RETRY_DELAY` | `3` / `2` | Retry transient upstream/proxy 502/503/504 responses with exponential backoff |
 | `APKPT_TOOL_ALLOWED_HOSTS` | official hosts listed above | Comma-separated HTTPS download host allowlist |
 | `APKPT_INSTALLED_DB` | `backend/storage/installed_tools.db` | SQLite inventory of installed executables/setup files |
+| `APKPT_RMS_PORT` | `8004` | Build `APKPT_RMS_URL` on a dedicated local port when set |
 | `APKPT_RMS_URL` | empty | Configured RMS web UI used by the gated Web UI button |
+| `APKPT_ZAP_WEB_PORT` | `8005` | Build `APKPT_ZAP_WEB_URL` on a dedicated local port when set |
 | `APKPT_ZAP_WEB_URL` | empty | Configured ZAP web UI used by the gated Web UI button |
 | `APKPT_EMULATOR_SYSTEM_IMAGE` | Android 34 Google APIs | AVD system image (arch auto-detected) |
 | `APKPT_PROXY_HOST` / `_PORT` | `127.0.0.1` / `8080` | Interception proxy listener address |
